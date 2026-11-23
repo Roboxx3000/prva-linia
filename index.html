@@ -1,0 +1,1419 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Prvá línia</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#1a0a0e;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#f6eef0}
+  canvas{display:block}
+  #hud{position:fixed;left:14px;top:14px;width:250px;padding:12px 14px;background:rgba(20,6,10,.62);border:1px solid rgba(255,255,255,.12);border-radius:8px;font-size:13px;line-height:1.45;pointer-events:none;display:none}
+  #hud h3{margin:0 0 6px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#ffd27a}
+  .row{display:flex;justify-content:space-between;gap:8px}
+  .bar{height:7px;background:rgba(255,255,255,.12);border-radius:4px;margin:2px 0 7px;overflow:hidden}
+  .bar i{display:block;height:100%;width:0;border-radius:4px}
+  #legend{margin-top:6px;font-size:11.5px;opacity:.85}
+  .dot{display:inline-block;width:9px;height:9px;margin-right:5px;vertical-align:-1px}
+  #cross{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;pointer-events:none;display:none}
+  #cross:before,#cross:after{content:"";position:absolute;background:rgba(255,255,255,.75)}
+  #cross:before{left:6px;top:0;width:2px;height:14px}#cross:after{top:6px;left:0;height:2px;width:14px}
+  #hint{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:min(720px,92vw);text-align:center;font-size:15px;padding:8px 14px;background:rgba(20,6,10,.55);border-radius:8px;pointer-events:none;display:none}
+  #msg{position:fixed;left:50%;top:18%;transform:translateX(-50%);max-width:min(640px,90vw);text-align:center;font-size:18px;font-weight:600;text-shadow:0 2px 8px #000;pointer-events:none;transition:opacity .4s;opacity:0}
+  .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(18,4,8,.82);cursor:pointer}
+  .card{max-width:640px;margin:16px;padding:26px 30px;background:#2a0e15;border:1px solid rgba(255,210,122,.3);border-radius:12px;line-height:1.55;font-size:15px}
+  .card h1{margin:0 0 4px;font-size:34px;color:#ffd27a;letter-spacing:.02em}
+  .card h2{margin:0 0 16px;font-size:16px;font-weight:500;color:#e9a9b5}
+  .card ol{padding-left:20px;margin:10px 0}
+  .card .keys{font-size:13.5px;opacity:.9;margin-top:12px}
+  .card .go{margin-top:18px;font-weight:700;color:#ffd27a}
+  kbd{background:#4a1d27;border-radius:4px;padding:1px 6px;font-family:inherit;font-size:12.5px}
+  #pause,#koniec{display:none}
+  .lvls{display:flex;gap:10px;justify-content:center;margin:6px 0 4px}
+  .lvls a{color:#e8dcf5;text-decoration:none;padding:5px 12px;border:1px solid #6b4a8a;border-radius:14px;font-size:14px}
+  .lvls a.on{background:#6b4a8a;color:#fff}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="hud">
+  <h3 id="hTitle">Neutrofil č. 1</h3>
+  <div class="row"><span id="lTime">Čas od poranenia</span><b id="hTime">0 min</b></div>
+  <div class="row"><span>Baktérie</span><b id="hBac">0</b></div>
+  <div class="bar"><i id="bBac" style="background:#e3b23c"></i></div>
+  <div class="row"><span>Poškodenie tkaniva</span><b id="hTis">0 %</b></div>
+  <div class="bar"><i id="bTis" style="background:#e0566c"></i></div>
+  <div class="row"><span>Membrána neutrofilu</span><b id="hHp">100 %</b></div>
+  <div class="bar"><i id="bHp" style="background:#c9b8f0"></i></div>
+  <div class="row"><span>Granuly</span><b id="hGr">●●●</b></div>
+  <div class="row"><span>Fagocytované</span><b id="hEat">0 / 20</b></div>
+  <div class="row"><span>Neutrofily v pohotovosti</span><b id="hRes">6</b></div>
+  <div class="row" id="abRow" style="display:none"><span>Protilátky IgG</span><b id="hAb">zatiaľ nie</b></div>
+  <div id="sigWrap"><div class="row"><span>Signál IL-8</span><b id="hSig"></b></div>
+  <div class="bar"><i id="bSig" style="background:#c8f06a"></i></div></div>
+  <div id="legend">
+    <div><span class="dot" id="lgBac" style="background:#e3b23c"></span><span id="lgBacT">S. aureus</span></div>
+    <div><span class="dot" style="background:#b27ce0"></span><span id="lgOpsT">označený komplementom (C3b)</span></div>
+    <div><span class="dot" style="background:#3fe0d0"></span>selektíny na zapálenom endoteli</div>
+  </div>
+</div>
+<div id="cross"></div>
+<div id="hint"></div>
+<div id="msg"></div>
+
+<div class="ov" id="menu"><div class="card">
+  <h1>Prvá línia</h1>
+  <div class="lvls"><a href="?uroven=1" id="lv1">1. Škrabanec</a><a href="?uroven=2" id="lv2">2. Angína</a></div>
+  <h2 id="mTitle">1. úroveň – Škrabanec</h2>
+  <p id="mIntro">Na prste vznikol škrabanec a do kože sa dostali baktérie <i>Staphylococcus aureus</i>. Si <b>neutrofil</b>, najpočetnejšia biela krvinka. Plávaš v drobnej žilke (postkapilárnej venule) pod ranou.</p>
+  <ol>
+    <li>Nájdi zapálený úsek cievy (tyrkysové selektíny na stene) a dotkni sa ho.</li>
+    <li>Keď ťa integríny pevne prichytia, stlač <kbd>E</kbd> a prejdi stenou do tkaniva.</li>
+    <li id="mStep3">Sleduj signál IL-8 k baktériám a zlikviduj ich skôr, než sa premnožia.</li>
+  </ol>
+  <div class="keys">
+    <kbd>Myš</kbd> rozhliadanie &nbsp; <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> pohyb &nbsp; <kbd>Medzerník</kbd>/<kbd>Shift</kbd> hore/dole<br>
+    <kbd>Ľavé tlačidlo</kbd> (držať) fagocytóza &nbsp; <kbd>F</kbd> degranulácia &nbsp; <kbd>R</kbd> NET – neutrofil pritom zanikne &nbsp; <kbd>Esc</kbd> pauza
+  </div>
+  <p class="keys" id="mNote">Baktérie označené komplementom (fialové) pohltíš rýchlejšie. Pozor: silný zásah poškodzuje aj vlastné tkanivo a toxíny baktérií ničia membránu neutrofilu.</p>
+  <div class="go">Klikni a začni</div>
+</div></div>
+<div class="ov" id="pause"><div class="card"><h1>Pauza</h1><div class="go">Klikni a pokračuj</div></div></div>
+<div class="ov" id="koniec"><div class="card"><h1 id="kTitle"></h1><p id="kText"></p><div class="go">Klikni pre novú hru</div></div></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+THREE.ColorManagement.enabled = false;
+
+// ---------- pomocné ----------
+const rand = (a, b) => a + Math.random() * (b - a);
+const hex2rgb = h => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
+function hash3(x, y, z) {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(z, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+}
+
+// ---------- svet (rovnaký kód beží v hlavnom vlákne aj vo workeroch) ----------
+// herná logika beží v µm (mriežka W×H×D), obraz sa skladá po kockách z jemnej mriežky RES blokov na µm (?res=N v adrese)
+function worldModule(RES, seed, LVL = 1) {
+  const L2 = LVL === 2;   // 2. úroveň: mandľa (angína)
+  let sd = seed >>> 0;
+  const rand = (a, b) => {   // mulberry32 – rovnaký svet vo všetkých vláknach
+    sd = (sd + 0x6D2B79F5) | 0; let t = Math.imul(sd ^ (sd >>> 15), 1 | sd);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return a + (((t ^ (t >>> 14)) >>> 0) / 4294967296) * (b - a);
+  };
+  const hex2rgb = h => [(h >> 16 & 255) / 255, (h >> 8 & 255) / 255, (h & 255) / 255];
+  function hash3(x, y, z) {
+    let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(z, 1274126177);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+const W = 128, H = 72, D = 128;
+const GW = W * RES, GH = H * RES, GD = D * RES, IR = 1 / RES;
+const VY = 26, VZ = 40, R = 13;          // venula pozdĺž osi X
+const WOUND = { x: 64, z: 80, r: 9 };
+const T = { FAT: 1, COL: 2, COL2: 3, FIB: 4, FIBN: 5, ENDO: 6, SEL: 7, BASAL: 8, KER: 9, CORN: 10, ELAST: 11, MAST: 12, PERI: 13, FIBRIN: 14, SCAB: 15, LYMPH: 16, RBCT: 17, SQ: 18, RET: 19, MANT: 20, GC: 21, LC: 22, DEB: 23, CAPS: 24 };
+const PAL = { 1: 0xf1e3b5, 2: 0xe9a9b5, 3: 0xf2c4cc, 4: 0xb48fc4, 5: 0x6b4a8a, 6: 0xd9707e, 7: 0x3fe0d0, 8: 0x9b5f8f, 9: 0xe6b3a3, 10: 0xf3e1c8, 11: 0x6a3a5e, 12: 0x8a76c4, 13: 0xb76f86, 14: 0xf0dc9a, 15: 0x6b2a20, 16: 0xd8c7e8, 17: 0xa81b28, 18: 0xe7a3b0, 19: 0xd98aa6, 20: 0x5a3f9a, 21: 0xb7a6e0, 22: 0x8c78c8, 23: 0xd9c2c6, 24: 0xeedad6 };
+const LY = { x: 104, y: 44, r: 5 };   // lymfatická kapilára pozdĺž osi Z
+const mastPts = [], follPts = [];
+const grid = new Uint8Array(W * H * D);            // hrubá mriežka (1 µm) – kolízie, baktérie, kamera
+const idx = (x, y, z) => x + W * (y + H * z);
+const inB = (x, y, z) => x >= 0 && y >= 0 && z >= 0 && x < W && y < H && z < D;
+const dvAt = (y, z) => Math.hypot(y - VY, z - VZ);
+function vnoise(x, y, z) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  let fx = x - ix, fy = y - iy, fz = z - iz;
+  fx = fx * fx * (3 - 2 * fx); fy = fy * fy * (3 - 2 * fy); fz = fz * fz * (3 - 2 * fz);
+  const h = (a, b, c) => hash3(ix + a, iy + b, iz + c), l = (a, b, t) => a + (b - a) * t;
+  return l(l(l(h(0, 0, 0), h(1, 0, 0), fx), l(h(0, 1, 0), h(1, 1, 0), fx), fy), l(l(h(0, 0, 1), h(1, 0, 1), fx), l(h(0, 1, 1), h(1, 1, 1), fx), fy), fz);
+}
+function worley2(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y); let f1 = 9, f2 = 9;
+  for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) {
+    const d = Math.hypot(ix + i + hash3(ix + i, iy + j, 17) - x, iy + j + hash3(ix + i, iy + j, 29) - y);
+    if (d < f1) { f2 = f1; f1 = d; } else if (d < f2) f2 = d;
+  }
+  return [f1, f2];
+}
+
+// 2D mapy šumu v danej hustote (tuk, bazálna membrána, okraj rany)
+function noiseMaps(res) {
+  const nx = W * res, nz = D * res, fat = new Float32Array(nx * nz), base = new Float32Array(nx * nz), wound = new Float32Array(nx * nz);
+  for (let gz = 0; gz < nz; gz++) for (let gx = 0; gx < nx; gx++) {
+    const wx = (gx + .5) / res, wz = (gz + .5) / res, i = gx + nx * gz;
+    fat[i] = 2 + (vnoise(wx * .35, 1, wz * .35) - .5) * .8;
+    base[i] = 62 + (vnoise(wx * .3, 3, wz * .3) - .5) * 1.6;
+    wound[i] = Math.hypot(wx - WOUND.x, wz - WOUND.z) + (vnoise(wx * .35, 7, wz * .35) - .5) * 3;
+  }
+  return { res, nx, fat, base, wound };
+}
+// základ: tuk, epidermis, stena venuly
+function baseAt(M, gx, gy, gz) {
+  const r = M.res, wy = (gy + .5) / r, dv = dvAt(wy, (gz + .5) / r);
+  if (dv >= R && dv < R + 2) { const wx = (gx + .5) / r; return (dv < R + 1 && wx >= 46 && wx <= 85 && hash3(gx, gy, gz) < .3) ? T.SEL : T.ENDO; }
+  if (dv < R) return 0;
+  const i2 = gx + M.nx * gz;
+  if (wy < M.fat[i2]) return L2 ? T.CAPS : T.FAT;
+  if (L2) return wy >= M.base[i2] && wy < 69 ? (wy >= 64 ? T.SQ : T.BASAL) : 0;   // mandľa: nerohovatejúci epitel, nad ním hltan
+  if (wy >= M.base[i2] && M.wound[i2] > WOUND.r + (wy - 62) * .5) return wy >= 70 ? T.CORN : wy >= 64 ? T.KER : T.BASAL;
+  return 0;
+}
+// tvary sveta sú zapísané ako operácie; vykreslia sa do ľubovoľnej hustoty (hrubá mriežka aj jemné kocky)
+const OPS = [];
+function applyOp(o, buf, res, ox, oy, oz, sx, sy, sz, kx = 1, ky = sx, kz = sx * sy) {
+  const ax = Math.max(ox, 0, Math.floor(o.x0 * res)), ay = Math.max(oy, 0, Math.floor(o.y0 * res)), az = Math.max(oz, 0, Math.floor(o.z0 * res));
+  const bx = Math.min(ox + sx - 1, W * res - 1, Math.floor(o.x1 * res)), by = Math.min(oy + sy - 1, H * res - 1, Math.floor(o.y1 * res)), bz = Math.min(oz + sz - 1, D * res - 1, Math.floor(o.z1 * res));
+  const fn = o.fn;
+  for (let gz = az; gz <= bz; gz++) {
+    const wz = (gz + .5) / res;
+    for (let gx = ax; gx <= bx; gx++) {
+      const wx = (gx + .5) / res, b0 = kx * (gx - ox) + kz * (gz - oz) - ky * oy;
+      for (let gy = ay; gy <= by; gy++) {
+        const i = b0 + ky * gy, t = fn(wx, (gy + .5) / res, wz, buf[i]);
+        if (t !== undefined) buf[i] = t;
+      }
+    }
+  }
+}
+
+function genWorld() {
+  const M = noiseMaps(1);
+  for (let z = 0; z < D; z++) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) grid[idx(x, y, z)] = baseAt(M, x, y, z);
+  const fill = (x0, y0, z0, x1, y1, z1, fn) => { const o = { x0, y0, z0, x1, y1, z1, fn }; OPS.push(o); applyOp(o, grid, 1, 0, 0, 0, W, H, D); };
+  const ball = (cx, cy, cz, r, fn) => fill(cx - r, cy - r, cz - r, cx + r, cy + r, cz + r,
+    (x, y, z, c) => (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2 <= r * r ? fn(x, y, z, c) : undefined);
+  // úsek vlákna: úsečka p→q, polomer plynule z r0 na r1
+  const tube = (p, q, r0, r1, fn) => {
+    const dx = q[0] - p[0], dy = q[1] - p[1], dz = q[2] - p[2], L2 = dx * dx + dy * dy + dz * dz || 1e-9, rm = Math.max(r0, r1);
+    fill(Math.min(p[0], q[0]) - rm, Math.min(p[1], q[1]) - rm, Math.min(p[2], q[2]) - rm, Math.max(p[0], q[0]) + rm, Math.max(p[1], q[1]) + rm, Math.max(p[2], q[2]) + rm, (x, y, z, c) => {
+      let s = ((x - p[0]) * dx + (y - p[1]) * dy + (z - p[2]) * dz) / L2; s = s < 0 ? 0 : s > 1 ? 1 : s;
+      const ex = x - p[0] - dx * s, ey = y - p[1] - dy * s, ez = z - p[2] - dz * s, r = r0 + (r1 - r0) * s;
+      return ex * ex + ey * ey + ez * ez <= r * r ? fn(x, y, z, c) : undefined;
+    });
+  };
+  const air = t => (x, y, z, c) => c ? undefined : t;
+  // lymfatická kapilára – tenká stena, medzi bunkami štrbiny
+  fill(LY.x - LY.r - 1, LY.y - LY.r - 1, 0, LY.x + LY.r + 1, LY.y + LY.r + 1, D, (x, y, z) => {
+    const dl = Math.hypot(x - LY.x, y - LY.y);
+    if (dl < LY.r) return 0;
+    if (dl < LY.r + .8) return hash3(Math.floor(Math.atan2(y - LY.y, x - LY.x) * 2.5), 5, Math.floor(z * .45)) > .12 ? T.LYMPH : 0;
+  });
+  const nearLymph = (x, y) => Math.hypot(x - LY.x, y - LY.y) < LY.r + 5;
+  // kolagénové vlákna (mierne zvlnená hrúbka)
+  for (let i = 0; i < (L2 ? 22 : 52); i++) {
+    const p = [rand(0, W), rand(4, 60), rand(0, D)];
+    let d = [rand(-1, 1), rand(-.35, .35), rand(-1, 1)];
+    const l = Math.hypot(...d); d = d.map(v => v / l);
+    const len = rand(30, 100), th = rand(1, 1.7), type = i % 2 ? T.COL : T.COL2, ph = rand(0, 6);
+    const fn = (x, y, z) => (y < 2 || y >= 61 || dvAt(y, z) < R + 11 || nearLymph(x, y)) ? undefined : type;
+    const at = s => [p[0] + d[0] * s, p[1] + d[1] * s, p[2] + d[2] * s], rad = s => th * (.9 + .12 * Math.sin(s * .4 + ph));
+    for (let s = 0; s < len; s += 1.5) { const s2 = Math.min(len, s + 1.5); tube(at(s), at(s2), rad(s), rad(s2), fn); }
+  }
+  // fibroblasty
+  for (let i = 0; i < 20; i++) {
+    const c = [rand(6, W - 6), rand(8, 58), rand(6, D - 6)];
+    if (dvAt(c[1], c[2]) < R + 14) continue;
+    const a = rand(0, Math.PI), ca = Math.cos(a), sa = Math.sin(a);
+    const ex = Math.hypot(7 * ca, 2.4 * sa) + .2, ez = Math.hypot(7 * sa, 2.4 * ca) + .2;
+    fill(c[0] - ex, c[1] - 2.4, c[2] - ez, c[0] + ex, c[1] + 2.4, c[2] + ez, (x, y, z) => {
+      const dx = x - c[0], dy = y - c[1], dz = z - c[2];
+      const lx = dx * ca + dz * sa, lz = -dx * sa + dz * ca;
+      if ((lx / 7) ** 2 + (dy / 2.2) ** 2 + (lz / 2.4) ** 2 > 1) return undefined;
+      return (lx / 3) ** 2 + (dy / 1.3) ** 2 + (lz / 1.4) ** 2 <= 1 ? T.FIBN : T.FIB;
+    });
+  }
+  // elastické vlákna – tenké a zvlnené
+  for (let i = 0; i < 45; i++) {
+    const p = [rand(0, W), rand(5, 58), rand(0, D)], a = rand(0, Math.PI * 2), len = rand(25, 60), ph = rand(0, 6);
+    const at = s => [p[0] + Math.cos(a) * s, p[1] + Math.sin(s * .45 + ph) * 1.6, p[2] + Math.sin(a) * s];
+    const ok = q => !(dvAt(q[1], q[2]) < R + 10 || nearLymph(q[0], q[1]));
+    for (let s = 0; s < len; s += .6) {
+      const q0 = at(s), q1 = at(Math.min(len, s + .6));
+      if (ok(q0) && ok(q1)) tube(q0, q1, .45, .45, air(T.ELAST));
+    }
+  }
+  // mastocyty okolo cievy (pri infekcii uvoľňujú histamín)
+  for (let i = 0; i < 26 && mastPts.length < 9; i++) {
+    const a = rand(.3, Math.PI - .3), r = R + rand(6, 9), c = [rand(10, W - 10), VY + Math.sin(a) * r, VZ + Math.cos(a) * r];
+    let ok = true;
+    for (let z = Math.floor(c[2] - 3); z <= c[2] + 3 && ok; z++) for (let y = Math.floor(c[1] - 3); y <= c[1] + 3 && ok; y++) for (let x = Math.floor(c[0] - 3); x <= c[0] + 3; x++)
+      if ((x + .5 - c[0]) ** 2 + (y + .5 - c[1]) ** 2 + (z + .5 - c[2]) ** 2 <= 9 && inB(x, y, z) && grid[idx(x, y, z)]) { ok = false; break; }
+    if (!ok) continue;
+    ball(c[0], c[1], c[2], 3.3, (x, y, z) => Math.hypot((x - c[0]) * .9, y - c[1], z - c[2]) <= 2.9 + (vnoise(x * 1.3, y * 1.3, z * 1.3) - .5) * .5 ? T.MAST : undefined);
+    mastPts.push(c);
+  }
+  // pericyty na vonkajšej strane venuly
+  for (let i = 0; i < 16; i++) {
+    const a0 = rand(0, Math.PI * 2), x0 = rand(4, W - 14);
+    const py = VY + Math.sin(a0) * (R + 2.35), pz = VZ + Math.cos(a0) * (R + 2.35);
+    fill(x0, py - 4.4, pz - 4.4, x0 + 10, py + 4.4, pz + 4.4, (x, y, z, c) => {
+      if (c) return undefined;
+      const dv = dvAt(y, z), a = Math.atan2(y - VY, z - VZ);
+      let da = Math.abs(a - a0) % (Math.PI * 2); if (da > Math.PI) da = Math.PI * 2 - da;
+      const w = .22 * (1 - ((x - x0 - 5) / 5.2) ** 2);
+      return dv >= R + 2 && dv < R + 2.7 && da < w ? T.PERI : undefined;
+    });
+  }
+  if (L2) return genTonsil(fill, ball, tube, air, nearLymph);
+  // rana: fibrínová sieť so zachytenými krvinkami a chrasta na povrchu
+  for (let i = 0; i < 34; i++) {
+    const a = rand(0, Math.PI * 2), r = rand(0, 10), p = [WOUND.x + Math.cos(a) * r, rand(58, 69), WOUND.z + Math.sin(a) * r];
+    let d = [rand(-1, 1), rand(-.5, .5), rand(-1, 1)]; const l = Math.hypot(...d); d = d.map(v => v / l);
+    const len = rand(6, 14);
+    tube(p, [p[0] + d[0] * len, p[1] + d[1] * len, p[2] + d[2] * len], .3, .3, air(T.FIBRIN));
+  }
+  for (let i = 0; i < 12; i++) {
+    const c = [WOUND.x + rand(-8, 8), rand(60, 68), WOUND.z + rand(-8, 8)], Rr = 2.6;
+    fill(c[0] - Rr, c[1] - 1, c[2] - Rr, c[0] + Rr, c[1] + 1, c[2] + Rr, (x, y, z, cur) => {
+      if (cur) return undefined;
+      const q = Math.hypot(x - c[0], z - c[2]) / Rr; if (q >= 1) return undefined;
+      const th = Math.sqrt(1 - q * q) * (.81 + 7.83 * q * q - 4.39 * q ** 4) * Rr / 3.91;   // tvar Evans–Fung
+      return Math.abs(y - c[1]) <= th / 2 ? T.RBCT : undefined;
+    });
+  }
+  fill(WOUND.x - 14, 69, WOUND.z - 14, WOUND.x + 14, 72, WOUND.z + 14, (x, y, z, c) => {
+    if (c || Math.hypot(x - WOUND.x, z - WOUND.z) >= WOUND.r + 5) return undefined;
+    return vnoise(x * .9, y * .9, z * .9) < .5 - (y - 69) * .12 ? T.SCAB : undefined;
+  });
+}
+
+// 2. úroveň – krčná mandľa: krypta (vchlípenie z hltana) vystlaná retikulárnym epitelom, lymfatické folikuly, lymfocyty
+const CRB = 30;                                   // dno krypty
+const cax = y => [WOUND.x + 4 * Math.sin((72 - y) * .12), WOUND.z + 3 * Math.sin((72 - y) * .09)];
+const crr = y => 9 + (Math.max(CRB, y) - CRB) / 42 * 3;
+function cryptD(x, y, z) {                        // vzdialenosť od steny lúmenu (záporná = vnútri)
+  const yy = Math.max(CRB, y), a = cax(yy);
+  return Math.hypot(x - a[0], y < CRB ? y - CRB : 0, z - a[1]) - crr(yy);
+}
+function genTonsil(fill, ball, tube, air, nearLymph) {
+  const macP = [[36, 44, 66], [94, 38, 100]];
+  const cryptFar = (x, y, z, m) => cryptD(x, y, z) > 2.4 + m;
+  // lymfatické folikuly: plášť drobných lymfocytov a svetlejšie zárodočné centrum
+  for (let i = 0; i < 400 && follPts.length < 6; i++) {
+    const rf = rand(8, 11), c = [rand(rf + 2, W - rf - 2), rand(rf + 6, 58 - rf), rand(rf + 2, D - rf - 2)];
+    if (dvAt(c[1], c[2]) < R + rf + 7 || !cryptFar(c[0], c[1], c[2], rf + 7) || Math.hypot(c[0] - LY.x, c[1] - LY.y) < LY.r + rf + 6) continue;
+    if (macP.some(m => Math.hypot(m[0] - c[0], m[1] - c[1], m[2] - c[2]) < rf + 9)) continue;
+    if (follPts.some(f => Math.hypot(f[0] - c[0], f[1] - c[1], f[2] - c[2]) < f[3] + rf + 9)) continue;
+    const ph = rand(0, 6);
+    ball(c[0], c[1], c[2], rf + .8, (x, y, z) => {
+      const d = Math.hypot(x - c[0], (y - c[1]) * 1.08, z - c[2]) + .7 * Math.sin(x * .5 + ph) * Math.cos(z * .45);
+      return d <= rf ? (d <= rf - 2.8 && y < c[1] + rf * .5 ? T.GC : T.MANT) : undefined;
+    });
+    follPts.push([...c, rf]);
+  }
+  // voľné lymfocyty medzi folikulmi (Ø ~7 µm)
+  for (let i = 0; i < 900; i++) {
+    const r = rand(3, 3.5), c = [rand(4, W - 4), rand(6, 58), rand(4, D - 4)];
+    if (dvAt(c[1], c[2]) < R + 6 || !cryptFar(c[0], c[1], c[2], r + 4) || nearLymph(c[0], c[1])) continue;
+    if (follPts.some(f => Math.hypot(f[0] - c[0], f[1] - c[1], f[2] - c[2]) < f[3] + r + 1)) continue;
+    if (macP.some(m => Math.hypot(m[0] - c[0], m[1] - c[1], m[2] - c[2]) < 12)) continue;
+    if (grid[idx(Math.floor(c[0]), Math.floor(c[1]), Math.floor(c[2]))]) continue;
+    ball(c[0], c[1], c[2], r, air(T.LC));
+    if (i > 0 && (i % 6 === 0) && i > 700) break;
+  }
+  // krypta: lúmen + retikulárny epitel (neutrofily ním prechádzajú)
+  const xr = 12 + 2.4 + 5;
+  fill(WOUND.x - xr, CRB - 15, WOUND.z - xr, WOUND.x + xr, 72, WOUND.z + xr, (x, y, z) => {
+    const d = cryptD(x, y, z);
+    return d < 0 ? 0 : d < 2.4 ? T.RET : undefined;
+  });
+  // odlúpené bunky epitelu v lúmene krypty
+  for (let i = 0; i < 9; i++) {
+    const y = rand(CRB + 3, 66), a = cax(y), an = rand(0, 6.28), rr = rand(0, crr(y) - 3), c = [a[0] + Math.cos(an) * rr, y, a[1] + Math.sin(an) * rr], Rr = rand(2.5, 3.5);
+    const nx = rand(-1, 1), nz = rand(-1, 1);
+    fill(c[0] - Rr, c[1] - Rr, c[2] - Rr, c[0] + Rr, c[1] + Rr, c[2] + Rr, (x, y, z, cur) => {
+      if (cur) return undefined;
+      const dx = x - c[0], dy = y - c[1], dz = z - c[2], h = dy + dx * nx * .4 + dz * nz * .4;
+      return Math.hypot(dx, dy, dz) < Rr && Math.abs(h) < .45 ? T.DEB : undefined;
+    });
+  }
+}
+
+// voxelový mesher (zakryté steny sa nekreslia, tieňovanie zapečené)
+const FACES = [
+  { n: [1, 0, 0], o: [1, 0, 0], u: [0, 1, 0], v: [0, 0, 1], s: .8 },
+  { n: [-1, 0, 0], o: [0, 0, 0], u: [0, 0, 1], v: [0, 1, 0], s: .74 },
+  { n: [0, 1, 0], o: [0, 1, 0], u: [0, 0, 1], v: [1, 0, 0], s: 1 },
+  { n: [0, -1, 0], o: [0, 0, 0], u: [1, 0, 0], v: [0, 0, 1], s: .55 },
+  { n: [0, 0, 1], o: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], s: .68 },
+  { n: [0, 0, -1], o: [0, 0, 0], u: [0, 1, 0], v: [1, 0, 0], s: .62 },
+];
+const AOL = [.45, .64, .83, 1];
+const QUAD = [[0, 0], [1, 0], [1, 1], [0, 1]];
+// farba jemného bloku podľa typu tkaniva a polohy (namiesto textúr)
+const PALRGB = {}; for (const k in PAL) PALRGB[k] = hex2rgb(PAL[k]);
+function worldColor(t, gx, gy, gz) {
+  const x = (gx + .5) * IR, y = (gy + .5) * IR, z = (gz + .5) * IR, n = hash3(gx, gy, gz);
+  let c = PALRGB[t], k = .95 + n * .1;
+  switch (t) {
+    case T.FAT: { const [f1, f2] = worley2(x / 5, z / 5); if (f2 - f1 < .1) k *= .74; break; }
+    case T.COL: case T.COL2: k *= .8 + .32 * vnoise(x * 1.4, y * 1.4, z * 1.4); break;
+    case T.FIB: if (n > .92) k *= .8; break;
+    case T.FIBN: k *= .75 + .4 * vnoise(x * 2, y * 2, z * 2); break;
+    case T.ENDO: case T.SEL: {
+      const a = Math.atan2(y - VY, z - VZ) * R;
+      const [f1, f2] = worley2(x / 4.5, a / 2.2);
+      if (t === T.SEL && n < .35) { c = [.45, .98, .9]; break; }
+      c = PALRGB[T.ENDO];
+      if (f2 - f1 < .1) k *= .72; else if (f1 < .2) c = [.55, .22, .42];
+      break;
+    }
+    case T.BASAL: { const [f1] = worley2(x / 1.8, z / 1.8); if (f1 < .3 && y < 63.4) c = [.36, .16, .38]; break; }
+    case T.KER: {
+      const row = Math.floor(y / 1.6), ox = ((x + (row % 2) * 2.5) % 5 + 5) % 5, oz = ((z + (row % 3) * 1.7) % 5 + 5) % 5, fy = y / 1.6 - row;
+      if (fy < .16 || ox < .4 || oz < .4) k *= .78;
+      else if (Math.hypot(ox - 2.5, oz - 2.5) < .7 && Math.abs(fy - .55) < .25) c = [.55, .32, .42];
+      break;
+    }
+    case T.CORN: if ((y / .7) % 1 < .3) k *= .84; break;
+    case T.ELAST: k *= .85 + .3 * n; break;
+    case T.MAST: { const g = hash3(Math.floor(x * 2.2), Math.floor(y * 2.2), Math.floor(z * 2.2)); if (g > .55) c = [.25, .16, .5]; else if (g > .45) c = [.55, .45, .95]; break; }
+    case T.PERI: k *= .85 + .2 * Math.sin(x * 1.1 + n); break;
+    case T.FIBRIN: k *= .85 + .25 * n; break;
+    case T.SCAB: k *= .7 + .5 * vnoise(x * 2, y * 2, z * 2); if (n > .96) c = [.55, .12, .1]; break;
+    case T.LYMPH: k *= .9 + .15 * n; break;
+    case T.RBCT: k *= .9 + .2 * n; break;
+    case T.CAPS: k *= .8 + .3 * vnoise(x * .7, y * 3, z * .7); break;
+    case T.SQ: {
+      const row = Math.floor(y / 1.1), ox = ((x + (row % 2) * 3) % 6 + 6) % 6, oz = ((z + (row % 3) * 2) % 6 + 6) % 6, fy = y / 1.1 - row;
+      if (fy < .14 || ox < .35 || oz < .35) k *= .8;
+      else if (Math.hypot(ox - 3, oz - 3) < .6 && Math.abs(fy - .55) < .22) c = [.5, .28, .48];
+      break;
+    }
+    case T.RET: { const g = hash3(Math.floor(x / 1.7), Math.floor(y / 1.7), Math.floor(z / 1.7)); if (g > .72) c = [.42, .3, .72]; k *= .85 + .25 * n; break; }
+    case T.MANT: { const g = vnoise(x * 1.7, y * 1.7, z * 1.7); if (g > .52) c = [.28, .2, .58]; k *= .9 + .15 * n; break; }
+    case T.GC: { if (hash3(Math.floor(x / 3), Math.floor(y / 3), Math.floor(z / 3)) > .9) c = [.88, .76, .58]; k *= .88 + .22 * vnoise(x * 1.2, y * 1.2, z * 1.2); break; }
+    case T.LC: k *= .8 + .35 * vnoise(x * 1.8, y * 1.8, z * 1.8); break;
+    case T.DEB: k *= .85 + .2 * n; break;
+  }
+  // svetlo preniká ranou zhora, hlbšie tkanivo je tmavšie
+  const dw = Math.hypot(x - WOUND.x, (y - 74) * 1.3, z - WOUND.z);
+  k *= .74 + .5 * Math.exp(-dw / 38) + y / H * .15;
+  return [c[0] * k * 1.04, c[1] * k * .97, c[2] * k];
+}
+
+// hladký povrch (Surface Nets): obsadenosť sa rozmaže a povrch sa vedie cez jej hladinu; B je kocka P³ (y najrýchlejšie)
+  const SNC = {};
+  function surfaceNet(B, P, lo, hi, colorOf, iso = .42) {
+    const PP = P * P, N = PP * P;
+    let C = SNC[P];
+    if (!C) C = SNC[P] = { F: new Float32Array(N), G: new Float32Array(N), VI: new Int32Array(N), VE: new Uint8Array(N), cap: 1 << 16 };
+    const F = C.F, G = C.G, VI = C.VI, VE = C.VE;
+    for (let i = 0; i < N; i++) F[i] = B[i] ? 1 : 0;
+    // rozmazanie [1 2 1]/4 po osiach y, x, z
+    const blur = (src, dst, s) => {
+      dst.set(src);
+      for (let z = 0; z < P; z++) for (let x = 0; x < P; x++) {
+        const b = P * x + PP * z;
+        for (let y = 0; y < P; y++) {
+          const i = b + y, c = s === 1 ? y : s === P ? x : z;
+          if (c > 0 && c < P - 1) dst[i] = (src[i - s] + 2 * src[i] + src[i + s]) * .25;
+        }
+      }
+    };
+    blur(F, G, 1); blur(G, F, P); blur(F, G, PP);
+    // tenké vlákna nesmú zmiznúť: obsadený blok ostáva vnútri
+    for (let i = 0; i < N; i++) F[i] = B[i] && G[i] < .55 ? .55 : G[i];
+    const CO = [0, P, 1, P + 1, PP, PP + P, PP + 1, PP + P + 1];   // rohy bunky (x = bit0, y = bit1, z = bit2)
+    const ED = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+    let cap = C.cap, pos = new Float32Array(cap * 3), col = new Uint8Array(cap * 3), nv = 0;
+    const cv = new Float32Array(8);
+    const samp = (x, y, z) => {
+      x = Math.min(P - 1.001, Math.max(0, x)); y = Math.min(P - 1.001, Math.max(0, y)); z = Math.min(P - 1.001, Math.max(0, z));
+      const ix = x | 0, iy = y | 0, iz = z | 0, fx = x - ix, fy = y - iy, fz = z - iz, i = iy + P * ix + PP * iz;
+      const a = F[i] + (F[i + 1] - F[i]) * fy, b = F[i + P] + (F[i + P + 1] - F[i + P]) * fy;
+      const c = F[i + PP] + (F[i + PP + 1] - F[i + PP]) * fy, d = F[i + PP + P] + (F[i + PP + P + 1] - F[i + PP + P]) * fy;
+      const e = a + (b - a) * fx, f = c + (d - c) * fx;
+      return e + (f - e) * fz;
+    };
+    for (let z = lo - 1; z < hi; z++) for (let x = lo - 1; x < hi; x++) {
+      let i = lo - 1 + P * x + PP * z;
+      for (let y = lo - 1; y < hi; y++, i++) {
+        let m = 0;
+        for (let k = 0; k < 8; k++) { const v = F[i + CO[k]]; cv[k] = v; if (v > iso) m |= 1 << k; }
+        if (m === 0 || m === 255) continue;
+        let sx = 0, sy = 0, sz = 0, n = 0;
+        for (let e = 0; e < 12; e++) {
+          const a = ED[e][0], b = ED[e][1];
+          if (((m >> a) & 1) === ((m >> b) & 1)) continue;
+          const t = (iso - cv[a]) / (cv[b] - cv[a]);
+          sx += (a & 1) + ((b & 1) - (a & 1)) * t; sy += ((a >> 1) & 1) + (((b >> 1) & 1) - ((a >> 1) & 1)) * t; sz += ((a >> 2) & 1) + (((b >> 2) & 1) - ((a >> 2) & 1)) * t; n++;
+        }
+        const px = x + sx / n, py = y + sy / n, pz = z + sz / n;
+        let gx = cv[1] + cv[3] + cv[5] + cv[7] - cv[0] - cv[2] - cv[4] - cv[6];
+        let gy = cv[2] + cv[3] + cv[6] + cv[7] - cv[0] - cv[1] - cv[4] - cv[5];
+        let gz = cv[4] + cv[5] + cv[6] + cv[7] - cv[0] - cv[1] - cv[2] - cv[3];
+        const gl = Math.hypot(gx, gy, gz) || 1; gx /= -gl; gy /= -gl; gz /= -gl;
+        // farba podľa najplnšieho skutočného bloku v rohoch
+        let best = -1, bt = 0, bk = 0;
+        for (let k = 0; k < 8; k++) { const t = B[i + CO[k]]; if (t && t !== 255 && cv[k] > best) { best = cv[k]; bt = t; bk = k; } }
+        if (!bt) for (let dz = -1; dz <= 2; dz++) for (let dx = -1; dx <= 2; dx++) for (let dy = -1; dy <= 2; dy++) {   // vyplnený kút: farba od suseda
+          const j = i + dy + P * dx + PP * dz; if (j < 0 || j >= N) continue;
+          const t = B[j]; if (t && t !== 255 && F[j] > best) { best = F[j]; bt = t; bk = 0; }
+        }
+        if (nv >= cap) { cap *= 2; const p2 = new Float32Array(cap * 3), c2 = new Uint8Array(cap * 3); p2.set(pos); c2.set(col); pos = p2; col = c2; }
+        VI[i] = nv; VE[i] = bt ? 0 : 1;
+        const o = nv * 3;
+        pos[o] = px; pos[o + 1] = py; pos[o + 2] = pz;
+        if (bt) {
+          const c = colorOf(bt, x + (bk & 1), y + ((bk >> 1) & 1), z + ((bk >> 2) & 1));
+          const ao = 1 - .55 * Math.min(1, samp(px + gx * 1.8, py + gy * 1.8, pz + gz * 1.8) * 1.6);
+          const k = (.72 + .22 * gy + .06 * gx) * ao * 127.5;
+          col[o] = Math.min(255, c[0] * k); col[o + 1] = Math.min(255, c[1] * k); col[o + 2] = Math.min(255, c[2] * k);
+        }
+        nv++;
+      }
+    }
+    C.cap = Math.max(C.cap, cap);
+    // štvoruholníky cez hrany, kde sa mení vnútro/von
+    let ind = new Uint32Array(Math.max(1024, nv * 6)), ni = 0;
+    const AX = [[P, 1, PP], [1, PP, P], [PP, P, 1]];   // os a, potom b, c (cyklicky)
+    for (let z = lo; z < hi; z++) for (let x = lo; x < hi; x++) {
+      let i = lo + P * x + PP * z;
+      for (let y = lo; y < hi; y++, i++) {
+        const in0 = F[i] > iso;
+        for (let a = 0; a < 3; a++) {
+          const [sa, sb, sc] = AX[a];
+          if (in0 === (F[i + sa] > iso)) continue;
+          const v0 = VI[i], v1 = VI[i - sb], v2 = VI[i - sb - sc], v3 = VI[i - sc];
+          if (VE[i] && VE[i - sb] && VE[i - sb - sc] && VE[i - sc]) continue;
+          if (ni + 6 > ind.length) { const i2 = new Uint32Array(ind.length * 2); i2.set(ind); ind = i2; }
+          if (in0) { ind[ni++] = v0; ind[ni++] = v1; ind[ni++] = v2; ind[ni++] = v0; ind[ni++] = v2; ind[ni++] = v3; }
+          else { ind[ni++] = v0; ind[ni++] = v2; ind[ni++] = v1; ind[ni++] = v0; ind[ni++] = v3; ind[ni++] = v2; }
+        }
+      }
+    }
+    if (!ni) return null;
+    return { faces: ni / 6, pos: pos.slice(0, nv * 3), col: col.slice(0, nv * 3), ind: nv > 65535 ? ind.slice(0, ni) : Uint16Array.from(ind.subarray(0, ni)) };
+  }
+
+// svet sa skladá po kockách CS³ jemných blokov s okrajom PAD: kocka sa vykreslí z operácií, vyhladí, vymodeluje a pamäť sa uvoľní
+  const PAD = 3, CS = Math.min(96, RES * 16), P = CS + 2 * PAD, PP = P * P;
+  const NX = Math.ceil(GW / CS), NY = Math.ceil(GH / CS), NZ = Math.ceil(GD / CS);
+  let M = null, lists = null, buf;
+  function prepChunks() {
+    M = noiseMaps(RES); lists = new Map();
+    for (const o of OPS) {
+      const r = (a, N) => [Math.max(0, Math.floor((Math.floor(a[0] * RES) - PAD) / CS)), Math.min(N - 1, Math.floor((Math.floor(a[1] * RES) + PAD) / CS))];
+      const [x0, x1] = r([o.x0, o.x1], NX), [y0, y1] = r([o.y0, o.y1], NY), [z0, z1] = r([o.z0, o.z1], NZ);
+      for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const k = x + NX * (y + NY * z); let l = lists.get(k); if (!l) lists.set(k, l = []); l.push(o);
+      }
+    }
+    buf = new Uint8Array(P * P * P);
+  }
+  // poradie kociek: najprv okolie štartu v cieve
+  function chunkOrder() {
+    const order = [];
+    for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++)
+      order.push([x, y, z, Math.hypot((x + .5) * CS * IR - 10, (y + .5) * CS * IR - VY, (z + .5) * CS * IR - VZ)]);
+    return order.sort((a, b) => a[3] - b[3]).map(o => o.slice(0, 3));
+  }
+  function meshChunk(cx, cy, cz) {
+    const ox = cx * CS - PAD, oy = cy * CS - PAD, oz = cz * CS - PAD;
+    // rýchle triedenie podľa základu: celé prázdne / celé plné kocky bez ďalších tvarov sa preskočia
+    const y0 = (oy + .5) * IR, y1 = (oy + P - .5) * IR, z0 = (oz + .5) * IR, z1 = (oz + P - .5) * IR, x0 = (ox + .5) * IR, x1 = (ox + P - .5) * IR;
+    const cyv = Math.min(Math.max(VY, y0), y1), czv = Math.min(Math.max(VZ, z0), z1);
+    const dMin = Math.hypot(cyv - VY, czv - VZ), dMax = Math.max(Math.hypot(y0 - VY, z0 - VZ), Math.hypot(y1 - VY, z0 - VZ), Math.hypot(y0 - VY, z1 - VZ), Math.hypot(y1 - VY, z1 - VZ));
+    const wallFree = dMax < R || dMin >= R + 2;
+    const wx = Math.min(Math.max(WOUND.x, x0), x1), wz = Math.min(Math.max(WOUND.z, z0), z1);
+    const airBase = wallFree && (dMax < R || (y0 >= 3 && y1 < 61));
+    const solidBase = wallFree && dMin >= R + 2 && (y1 < 1.6 || (!L2 && y0 >= 63 && Math.hypot(wx - WOUND.x, wz - WOUND.z) > 17));
+    const ops = lists.get(cx + NX * (cy + NY * cz));
+    if (!ops && (airBase || solidBase)) return null;
+    // vykreslenie kocky aj s okrajom 1 blok (y je v pamäti najrýchlejšie): základ po stĺpcoch, stena cievy po riadkoch
+    const lyOf = w => { const k = Math.ceil(w * RES - .5 - oy); return k < 0 ? 0 : k > P ? P : k; };
+    const seg = (b, t, lo, hi) => { const a = lyOf(lo), e = lyOf(hi); if (e > a) buf.fill(t, b + a, b + e); };
+    buf.fill(0);
+    if (!airBase) for (let lz = 0; lz < P; lz++) for (let lx = 0; lx < P; lx++) {
+      const gx = ox + lx, gz = oz + lz;
+      if (gx < 0 || gz < 0 || gx >= GW || gz >= GD) continue;
+      const i2 = gx + M.nx * gz, b = P * lx + PP * lz, b0 = M.base[i2], b1 = Math.min(1e3, 62 + 2 * (M.wound[i2] - WOUND.r));
+      seg(b, L2 ? T.CAPS : T.FAT, -1, M.fat[i2]);
+      if (L2) { seg(b, T.BASAL, b0, 64); seg(b, T.SQ, Math.max(b0, 64), 69); }
+      else if (b1 > b0) { seg(b, T.BASAL, b0, Math.min(b1, 64)); seg(b, T.KER, Math.max(b0, 64), Math.min(b1, 70)); seg(b, T.CORN, Math.max(b0, 70), b1); }
+    }
+    if (!wallFree || dMax < R) for (let lz = 0; lz < P; lz++) for (let ly = 0; ly < P; ly++) {
+      const gy = oy + ly, gz = oz + lz, dv = dvAt((gy + .5) * IR, (gz + .5) * IR), b = ly + PP * lz;
+      if (dv < R) { for (let lx = 0; lx < P; lx++) buf[b + P * lx] = 0; }
+      else if (dv < R + 2) for (let lx = 0; lx < P; lx++) {
+        const gx = ox + lx, wx = (gx + .5) * IR;
+        buf[b + P * lx] = (dv < R + 1 && wx >= 46 && wx <= 85 && hash3(gx, gy, gz) < .3) ? T.SEL : T.ENDO;
+      }
+    }
+    if (ops) for (const o of ops) applyOp(o, buf, RES, ox, oy, oz, P, P, P, P, 1, PP);
+    // mimo sveta = plné
+    for (let lz = 0; lz < P; lz++) for (let lx = 0; lx < P; lx++) {
+      const gx = ox + lx, gz = oz + lz, b = P * lx + PP * lz;
+      if (gx < 0 || gz < 0 || gx >= GW || gz >= GD) { buf.fill(255, b, b + P); continue; }
+      if (oy < 0) buf[b] = 255;
+      if (oy + P > GH) buf.fill(255, b + Math.max(0, GH - oy), b + P);
+    }
+    const r = surfaceNet(buf, P, PAD, PAD + CS, (t, lx, ly, lz) => worldColor(t, ox + lx, oy + ly, oz + lz));
+    if (r) r.org = [ox + .5, oy + .5, oz + .5];
+    return r;
+  }
+  return { W, H, D, RES, GW, GH, GD, IR, VY, VZ, R, WOUND, T, PAL, LY, grid, idx, inB, dvAt, vnoise, worley2, genWorld, mastPts, follPts, LVL, FACES, AOL, QUAD, PALRGB, worldColor, cryptD, cax, crr, CS, P, prepChunks, chunkOrder, meshChunk, surfaceNet };
+}
+const RES = Math.max(2, Math.min(12, Math.round(+new URLSearchParams(location.search).get('res')) || 5));
+const SEED = (Math.random() * 4294967296) >>> 0;
+const LVL = +new URLSearchParams(location.search).get('uroven') === 2 ? 2 : 1;
+const L2 = LVL === 2;
+const WM = worldModule(RES, SEED, LVL);
+const { W, H, D, GW, GH, GD, IR, VY, VZ, R, WOUND, T, PAL, LY, grid, idx, inB, dvAt, vnoise, worley2, FACES, AOL, QUAD, PALRGB, worldColor } = WM;
+const mastC = [];
+
+// ---------- voxelový mesher (zakryté steny sa nekreslia, tieňovanie zapečené) ----------
+function buildGeo(sx, sy, sz, get, colorOf, tileOf, NT) {
+  const pos = [], col = [], uv = [], ind = []; let v = 0;
+  const so = (x, y, z) => get(x, y, z) ? 1 : 0;
+  for (let z = 0; z < sz; z++) for (let y = 0; y < sy; y++) for (let x = 0; x < sx; x++) {
+    const t = get(x, y, z); if (!t) continue;
+    const c = colorOf(t, x, y, z);
+    const ti = tileOf ? tileOf(t) : 0;
+    for (const f of FACES) {
+      const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+      if (get(nx, ny, nz)) continue;
+      const bx = x + f.o[0], by = y + f.o[1], bz = z + f.o[2];
+      const ao = [];
+      for (const [a, b] of QUAD) {
+        const su = a ? 1 : -1, sv = b ? 1 : -1;
+        const s1 = so(nx + f.u[0] * su, ny + f.u[1] * su, nz + f.u[2] * su);
+        const s2 = so(nx + f.v[0] * sv, ny + f.v[1] * sv, nz + f.v[2] * sv);
+        const cc = so(nx + f.u[0] * su + f.v[0] * sv, ny + f.u[1] * su + f.v[1] * sv, nz + f.u[2] * su + f.v[2] * sv);
+        ao.push(s1 && s2 ? 0 : 3 - (s1 + s2 + cc));
+      }
+      QUAD.forEach(([a, b], i) => {
+        pos.push(bx + f.u[0] * a + f.v[0] * b, by + f.u[1] * a + f.v[1] * b, bz + f.u[2] * a + f.v[2] * b);
+        const k = f.s * AOL[ao[i]];
+        col.push(c[0] * k, c[1] * k, c[2] * k);
+        if (tileOf) uv.push((ti + .002 + a * .996) / NT, b);
+      });
+      if (ao[0] + ao[2] < ao[1] + ao[3]) ind.push(v + 1, v + 2, v + 3, v + 1, v + 3, v);
+      else ind.push(v, v + 1, v + 2, v, v + 2, v + 3);
+      v += 4;
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  if (tileOf) g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(v > 65535 ? new THREE.Uint32BufferAttribute(ind, 1) : new THREE.Uint16BufferAttribute(ind, 1));
+  return g;
+}
+
+// svet: kocky skladajú workery paralelne (záloha: hlavné vlákno po častiach)
+function freeArr() { this.array = null; }
+async function meshWorld(progress) {
+  const CS = WM.CS, group = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  mat.color.setRGB(2, 2, 2);                        // farby sú uložené v polovičnej škále (Uint8)
+  let faces = 0, done = 0;
+  const order = WM.chunkOrder(), total = order.length;
+  const add = (cx, cy, cz, r) => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(r.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(r.col, 3, true));
+    g.setIndex(new THREE.BufferAttribute(r.ind, 1));
+    for (const a of [g.attributes.position, g.attributes.color, g.index]) a.onUpload(freeArr);   // po nahratí do GPU uvoľniť kópiu v RAM
+    const PC = WM.P;
+    g.boundingSphere = new THREE.Sphere(new THREE.Vector3(PC / 2, PC / 2, PC / 2), PC * .87);
+    const mesh = new THREE.Mesh(g, mat);
+    mesh.scale.setScalar(IR); mesh.position.set(r.org[0] * IR, r.org[1] * IR, r.org[2] * IR);
+    mesh.matrixAutoUpdate = false; mesh.updateMatrix();
+    group.add(mesh); faces += r.faces;
+  };
+  const nW = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+  let threads = 0;
+  try {
+    const src = worldModule.toString() + `
+let WMw;
+onmessage = e => {
+  const d = e.data;
+  if (d.init) { WMw = worldModule(d.res, d.seed, d.lvl); WMw.genWorld(); WMw.prepChunks(); return; }
+  const out = [], tr = [];
+  for (const [cx, cy, cz] of d.chunks) { const r = WMw.meshChunk(cx, cy, cz); if (r) { out.push([cx, cy, cz, r]); tr.push(r.pos.buffer, r.col.buffer, r.ind.buffer); } }
+  postMessage({ out, n: d.chunks.length }, tr);
+};`;
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    await new Promise((res, rej) => {
+      let next = 0;
+      const ws = [];
+      const feed = w => { if (next < total) w.postMessage({ chunks: order.slice(next, next += 3) }); };
+      for (let i = 0; i < nW; i++) {
+        const w = new Worker(url); ws.push(w);
+        w.onerror = e => { ws.forEach(x => x.terminate()); rej(e); };
+        w.onmessage = e => {
+          for (const [cx, cy, cz, r] of e.data.out) add(cx, cy, cz, r);
+          done += e.data.n; progress(done / total);
+          if (done >= total) { ws.forEach(x => x.terminate()); res(); } else feed(w);
+        };
+        w.postMessage({ init: 1, res: RES, seed: SEED, lvl: LVL });
+        feed(w); feed(w);
+      }
+      threads = nW;
+    });
+  } catch (e) {
+    console.warn('Workery nedostupné, svet sa skladá v hlavnom vlákne.', e);
+    group.clear(); faces = 0; done = 0; threads = 1;
+    WM.prepChunks();
+    let tY = performance.now();
+    for (const [cx, cy, cz] of order) {
+      const r = WM.meshChunk(cx, cy, cz); if (r) add(cx, cy, cz, r);
+      done++;
+      if (performance.now() - tY > 40) { progress(done / total); await new Promise(r => { const ch = new MessageChannel(); ch.port1.onmessage = r; ch.port2.postMessage(0); }); tY = performance.now(); }
+    }
+  }
+  return { group, faces, threads };
+}
+
+// malé modely: fn dostáva súradnice v µm, res = počet blokov na µm
+function buildModel(s, fn, res = 1) {
+  const m = Math.round(s * res), pad = 3, n = 2 * m + 1, P = n + 2 * pad, B = new Uint8Array(P * P * P), pal = [0], idx = new Map();
+  for (let z = -m; z <= m; z++) for (let y = -m; y <= m; y++) for (let x = -m; x <= m; x++) {
+    const c = fn(x / res, y / res, z / res); if (!c) continue;
+    let k = idx.get(c); if (k === undefined) { k = pal.length; pal.push(c); idx.set(c, k); }
+    B[(y + m + pad) + P * (x + m + pad) + P * P * (z + m + pad)] = k;
+  }
+  const r = WM.surfaceNet(B, P, 1, P - 1, (t, x, y, z) => { const k = .92 + hash3(x, y, z) * .16; return hex2rgb(pal[t]).map(v => Math.min(1, v * k)); });
+  const g = new THREE.BufferGeometry();
+  const pos = r.pos; for (let i = 0; i < pos.length; i++) pos[i] = (pos[i] - pad - m) / res;
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(Float32Array.from(r.col, v => v / 127.5), 3));
+  g.setIndex(new THREE.BufferAttribute(r.ind, 1));
+  return g;
+}
+
+// ---------- scéna ----------
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const FOG = 0x3b1820;
+scene.background = new THREE.Color(FOG);
+scene.fog = new THREE.Fog(FOG, 22, 115);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, .1, 130);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), .7, .55, .8);
+composer.addPass(bloom);
+const fx = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, uDmg: { value: 0 }, uTime: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float uDmg; uniform float uTime; varying vec2 vUv;
+    void main(){
+      vec2 d = vUv - .5; float r = length(d);
+      vec2 off = d * (.0035 + uDmg * .012);
+      vec3 c = vec3(texture2D(tDiffuse, vUv + off).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - off).b);
+      c *= mix(.5, 1., smoothstep(.82, .28, r));
+      float pulse = .75 + .25 * sin(uTime * 7.);
+      c = mix(c, vec3(.8, .04, .1), uDmg * pulse * smoothstep(.2, .75, r) * .85);
+      c += (fract(sin(dot(vUv * 913. + uTime, vec2(12.9898, 78.233))) * 43758.5453) - .5) * .025;
+      gl_FragColor = vec4(c, 1.);
+    }`,
+});
+composer.addPass(fx);
+composer.addPass(new OutputPass());
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
+
+const tGen = performance.now();
+WM.genWorld();
+for (const p of WM.mastPts) mastC.push(new THREE.Vector3(...p));
+const tMesh = performance.now();
+let ready = false;
+const goEl = document.querySelector('#menu .go');
+document.querySelectorAll('.lvls a').forEach(a => a.addEventListener('click', e => e.stopPropagation()));
+document.getElementById('lv' + LVL).classList.add('on');
+if (L2) {
+  const set = (id, h) => document.getElementById(id).innerHTML = h;
+  set('mTitle', '2. úroveň – Angína');
+  set('mIntro', 'Bolí hrdlo a v krčnej mandli sa množia baktérie <i>Streptococcus pyogenes</i>. Usadili sa v krypte, úzkej jamke, ktorá vedie z povrchu mandle hlboko do tkaniva. Si <b>neutrofil</b> v drobnej žilke pod mandľou.');
+  set('mStep3', 'Sleduj signál IL-8 ku krypte, prejdi jej pórovitou výstelkou a zlikviduj reťazce streptokokov.');
+  set('mNote', 'Streptokoky majú puzdro, preto neoznačené pohlcuješ pomaly. Mandľa je lymfatický orgán: o chvíľu začnú plazmatické bunky z folikulov tvoriť protilátky. Baktérie označené protilátkami a komplementom (fialové) potom pohltíš rýchlo. Najviac protilátok je pri folikuloch.');
+  set('lTime', 'Čas od nákazy');
+  set('lgBacT', 'S. pyogenes');
+  set('lgOpsT', 'označený protilátkou IgG a C3b');
+  document.getElementById('lgBac').style.background = '#f5ecc8';
+  document.getElementById('abRow').style.display = 'flex';
+  document.title = 'Prvá línia – Angína';
+}
+meshWorld((p, f) => { goEl.textContent = `Pripravujem tkanivo… ${Math.round(p * 100)} %`; }).then(WORLD => {
+  scene.add(WORLD.group); ready = true; goEl.textContent = 'Klikni a začni';
+  window.__gen = { res: RES, gen: Math.round(tMesh - tGen), mesh: Math.round(performance.now() - tMesh), threads: WORLD.threads, faces: WORLD.faces, chunks: WORLD.group.children.length };
+});
+
+// modely
+// membrána s volánmi a lamelipódiom vpredu (lokálne -z = smer pohybu)
+const neuOuter = (x, y, z) => {
+  const d = Math.hypot(x, y, z) - .45 * Math.sin(x * 1.7 + 1) * Math.sin(z * 1.5) * Math.cos(y * 1.3);
+  const lam = (x / 3.6) ** 2 + ((y + .8) / 1.4) ** 2 + ((z + 5.2) / 2.2) ** 2;
+  const uro = (x / 1.9) ** 2 + ((y + .4) / 1.7) ** 2 + ((z - 5.6) / 1.9) ** 2;
+  return d <= 5.6 || lam <= 1 || uro <= 1;
+};
+const SH = .7;   // hrúbka membrány v µm
+const neuShell = buildModel(8, (x, y, z) => {
+  if (!neuOuter(x, y, z)) return 0;
+  const inner = neuOuter(x + SH, y, z) && neuOuter(x - SH, y, z) && neuOuter(x, y + SH, z) && neuOuter(x, y - SH, z) && neuOuter(x, y, z + SH) && neuOuter(x, y, z - SH);
+  return inner ? 0 : (z < -4 ? 0xf6f0ff : 0xe4dcf4);
+}, 3);
+const LOBES = [[-2.4, -.5, 0], [0, .7, .6], [2.4, -.3, -.4]];
+const neuCore = buildModel(5, (x, y, z) => {
+  for (let i = 0; i < 3; i++) {
+    const l = LOBES[i], nx = i === 1 ? 1.6 : 1.2;
+    if (Math.hypot(x - l[0], y - l[1], z - l[2]) < 1.8) return 0x5b2d8a;
+    // tenké mostíky chromatínu medzi lalokmi
+    if (i < 2) { const m = LOBES[i + 1], t = Math.max(0, Math.min(1, ((x - l[0]) * (m[0] - l[0]) + (y - l[1]) * (m[1] - l[1]) + (z - l[2]) * (m[2] - l[2])) / ((m[0] - l[0]) ** 2 + (m[1] - l[1]) ** 2 + (m[2] - l[2]) ** 2)));
+      if (Math.hypot(x - l[0] - (m[0] - l[0]) * t, y - l[1] - (m[1] - l[1]) * t, z - l[2] - (m[2] - l[2]) * t) < .45 * nx / 1.2) return 0x5b2d8a; }
+  }
+  if (Math.hypot(x, y, z) < 3.9 && hash3(Math.round(x * 3) + 9, Math.round(y * 3), Math.round(z * 3)) < .035) return 0xf0b8d8;
+  return 0;
+}, 3);
+const neutro = new THREE.Group();
+neutro.add(new THREE.Mesh(neuCore, new THREE.MeshBasicMaterial({ vertexColors: true })));
+neutro.add(new THREE.Mesh(neuShell, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: .4, depthWrite: false })));
+scene.add(neutro);
+const GN = 16, granGeoS = .32, granPos = [];
+const granMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(granGeoS, granGeoS, granGeoS), new THREE.MeshBasicMaterial({ transparent: true }), GN);
+for (let i = 0; i < GN; i++) { const v = new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(2.2, 3.8)); granPos.push(v); granMesh.setMatrixAt(i, new THREE.Matrix4().setPosition(v)); granMesh.setColorAt(i, new THREE.Color()); }
+neutro.add(granMesh);
+const neuMats = [neutro.children[0].material, neutro.children[1].material];
+const npcMats = [neuMats[0].clone(), neuMats[1].clone()];
+function makeNeutroMesh() { const g = new THREE.Group(); g.add(new THREE.Mesh(neuCore, npcMats[0])); g.add(new THREE.Mesh(neuShell, npcMats[1])); scene.add(g); return g; }
+
+const macGeo = buildModel(9, (x, y, z) => {
+  const d = Math.hypot(x, y, z);
+  const bump = 1.4 * Math.sin(x * .8 + 1) * Math.cos(z * .7) + 1.1 * Math.sin(y * .9 + z * .3);
+  if (d > 6.6 + bump) return 0;
+  return vnoise(x * .9 + 5, y * .9, z * .9) < .28 ? 0xa57a55 : 0xcfa680;
+}, 3);
+// červená krvinka – bikonkávny disk (tvar Evans–Fung, Ø 7,5 µm)
+const rbcGeo = buildModel(4, (x, y, z) => {
+  const q = Math.hypot(x, z) / 3.75; if (q >= 1) return 0;
+  const th = Math.sqrt(1 - q * q) * (.81 + 7.83 * q * q - 4.39 * q ** 4) * 3.75 / 3.91;
+  return Math.abs(y) <= th / 2 ? (q < .45 ? 0xc8434e : 0xa81b28) : 0;
+}, 4);
+const cubeGeo = buildGeo(1, 1, 1, (x, y, z) => (x === 0 && y === 0 && z === 0) ? 1 : 0, () => [1, 1, 1]);
+cubeGeo.translate(-.5, -.5, -.5);
+
+// červené krvinky
+const RBC_N = 46;
+const rbcMesh = new THREE.InstancedMesh(rbcGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), RBC_N);
+scene.add(rbcMesh);
+const rbcs = [];
+for (let i = 0; i < RBC_N; i++) {
+  const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * (R - 4.5);
+  rbcs.push({ x: rand(0, W), y: VY + Math.sin(a) * r, z: VZ + Math.cos(a) * r, q: new THREE.Euler(rand(0, 6), rand(0, 6), rand(0, 6)), w: rand(-.8, .8) });
+}
+
+// krvné doštičky
+const PLT_N = 70;
+const pltMesh = new THREE.InstancedMesh(buildModel(2, (x, y, z) => Math.hypot(x, z) <= 1.5 && Math.abs(y) <= .35 - .12 * (Math.hypot(x, z) / 1.5) ** 2 ? 0xcfa8de : 0, 4), new THREE.MeshBasicMaterial({ vertexColors: true }), PLT_N);
+scene.add(pltMesh);
+const plts = [];
+for (let i = 0; i < PLT_N; i++) {
+  const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random()) * (R - 2);
+  plts.push({ x: rand(0, W), y: VY + Math.sin(a) * r, z: VZ + Math.cos(a) * r, q: new THREE.Euler(rand(0, 6), rand(0, 6), rand(0, 6)), w: rand(-2, 2) });
+}
+
+// baktérie (aj tie vnútri neutrofilu)
+const BAC_MAX = 700;
+const bacGeo = buildModel(1, (x, y, z) => x * x + y * y + z * z <= .3 ? 0xffffff : 0, 6);   // kok Ø ~1,1 µm
+const bacMesh = new THREE.InstancedMesh(bacGeo, new THREE.MeshBasicMaterial({ vertexColors: true }), BAC_MAX);
+bacMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+bacMesh.setColorAt(0, new THREE.Color(0xffffff));
+scene.add(bacMesh);
+const C_BAC = L2 ? new THREE.Color(1.05, .98, .78) : new THREE.Color(1.05, .78, .22), C_OPS = new THREE.Color(.78, .5, 1.05), C_TRAP = new THREE.Color(0x8fa3b8), C_IN = new THREE.Color(0xa07a2a);
+
+// makrofágy
+const macMat = new THREE.MeshBasicMaterial({ vertexColors: true });
+const macMeshes = [new THREE.Mesh(macGeo, macMat), new THREE.Mesh(macGeo, macMat)];
+macMeshes.forEach(m => scene.add(m));
+
+// chemokíny (IL-8) – čiastočky difundujúce od baktérií
+const PN = 520;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(PN * 3);
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const parts = Array.from({ length: PN }, () => ({ p: new THREE.Vector3(0, -99, 0), v: new THREE.Vector3(), l: 0 }));
+scene.add(new THREE.Points(pGeo, new THREE.PointsMaterial({ color: new THREE.Color(1.1, 1.35, .55), size: .5, transparent: true, opacity: .85, depthWrite: false, blending: THREE.AdditiveBlending })));
+
+// protilátky IgG – po čase vytekajú z folikulov (len 2. úroveň)
+const AN = L2 ? 260 : 0, aPos = new Float32Array(Math.max(1, AN) * 3).fill(-99);
+const aParts = Array.from({ length: AN }, () => ({ p: new THREE.Vector3(0, -99, 0), v: new THREE.Vector3(), l: 0 }));
+const aGeo = new THREE.BufferGeometry(); aGeo.setAttribute('position', new THREE.BufferAttribute(aPos, 3));
+if (L2) scene.add(new THREE.Points(aGeo, new THREE.PointsMaterial({ color: new THREE.Color(.45, .7, 1.3), size: .45, transparent: true, opacity: .8, depthWrite: false, blending: THREE.AdditiveBlending })));
+
+// drobné častice v prostredí (proteíny, úlomky) – dávajú hĺbku
+const DN = 1800, dPos = new Float32Array(DN * 3), dVel = [];
+for (let i = 0; i < DN; i++) {
+  dPos[i * 3] = rand(0, W); dPos[i * 3 + 1] = rand(2, 62); dPos[i * 3 + 2] = rand(0, D);
+  dVel.push(new THREE.Vector3(rand(-.3, .3), rand(-.2, .2), rand(-.3, .3)));
+}
+const dGeo = new THREE.BufferGeometry(); dGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
+scene.add(new THREE.Points(dGeo, new THREE.PointsMaterial({ color: 0x9c6f7c, size: .28, transparent: true, opacity: .6, depthWrite: false })));
+
+// iskry (fagocytóza, degranulácia, NET, zánik buniek)
+const SPK = 500;
+const spkMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(.35, .35, .35), new THREE.MeshBasicMaterial(), SPK);
+spkMesh.setColorAt(0, new THREE.Color()); spkMesh.count = 0; scene.add(spkMesh);
+let sparks = [];
+function spark(p, color, n, speed = 6, life = .9) {
+  const c = new THREE.Color(color).multiplyScalar(1.6);
+  for (let i = 0; i < n && sparks.length < SPK; i++)
+    sparks.push({ p: p.clone(), v: new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(.3, 1) * speed), l: rand(.5, 1) * life, m: life, c });
+}
+
+// cieľ, šípka, efekty
+const targetBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.9, 1.9, 1.9)), new THREE.LineBasicMaterial({ color: 0xffffff }));
+scene.add(targetBox);
+const arrow = new THREE.Mesh(new THREE.ConeGeometry(.7, 2.4, 4), new THREE.MeshBasicMaterial({ color: 0xd8ff6a }));
+scene.add(arrow);
+const netGroup = new THREE.Group(); scene.add(netGroup);
+const burst = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshBasicMaterial({ color: 0xff8fb0, transparent: true, opacity: 0, depthWrite: false, wireframe: true }));
+scene.add(burst);
+
+// ---------- stav hry ----------
+const PR = 4.8;               // polomer kolízie neutrofilu
+const EAT_CAP = 20, BAC_LOSE = 450;
+let state = 'menu', paused = false;
+const P = { pos: new THREE.Vector3(), vel: new THREE.Vector3(), hp: 100, gran: 3, eaten: 0, inside: [], n: 0 };
+let yaw = -Math.PI / 2, pitch = 0;
+let bact = [], occ = new Set(), macs = [];
+let diaExit = null, diaStart = null, diaDur = 2;
+let reserve = 6, tissue = 0, minutes = 0, resT = 0, rollT = 0, lostT = 0, deadT = 0, diaT = 0;
+let npcs = [], npcT = 0, mastT = 0, lastTarget = null, abT = 0, abOn = false;
+const FOLL = WM.follPts.map(f => ({ c: new THREE.Vector3(f[0], f[1], f[2]), r: f[3] }));
+const follDist = (x, y, z) => { let m = 1e9; for (const f of FOLL) m = Math.min(m, Math.hypot(x - f.c.x, y - f.c.y, z - f.c.z) - f.r); return m; };
+const eatTime = b => L2 ? (b.ops ? .2 : 1.6) : (b.ops ? .15 : .8);
+let curT = null, holdT = 0, mouseDown = false, burstT = 0, dmgFx = 0, clock = 0;
+const FOG_V = new THREE.Color(0x4e0d18), FOG_T = new THREE.Color(L2 ? 0x2a1a33 : 0x34172a);
+const keys = new Set();
+const okey = (x, y, z) => x + ',' + y + ',' + z;
+
+function freeCell(x, y, z) {
+  return inB(x, y, z) && !grid[idx(x, y, z)] && !occ.has(okey(x, y, z)) && dvAt(y + .5, z + .5) > R + 2.5;
+}
+function addBac(x, y, z) {
+  const b = { x, y, z, t: rand(22, 32), ops: false, trap: 0, g: 0, ax: Math.floor(Math.random() * 6) };
+  bact.push(b); occ.add(okey(x, y, z)); return b;
+}
+const N6 = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+function divide(b) {
+  const order = N6.slice().sort(() => Math.random() - .5);
+  if (L2) { const i = order.indexOf(N6[b.ax]); order.splice(i, 1); order.unshift(N6[b.ax], N6[b.ax ^ 1]); }   // streptokoky sa delia v jednej rovine → reťazce
+  for (const d of order) {
+    const x = b.x + d[0], y = b.y + d[1], z = b.z + d[2];
+    if (freeCell(x, y, z)) { addBac(x, y, z).ax = b.ax; return true; }
+  }
+  return false;
+}
+function removeBac(b) { b.dead = true; occ.delete(okey(b.x, b.y, b.z)); }
+
+function reset() {
+  bact = []; occ.clear();
+  const seeds = L2 ? [40, 52, 62].map((y, i) => { const a = WM.cax(y), an = i * 2.1 + .4, r = WM.crr(y) - 1.6; return [Math.floor(a[0] + Math.cos(an) * r), y, Math.floor(a[1] + Math.sin(an) * r)]; }) : [[64, 54, 80], [57, 49, 87], [71, 57, 73]];
+  abT = 0; abOn = false;
+  for (const c of seeds) {
+    if (!freeCell(...c)) continue;
+    const cl = [addBac(...c)];
+    for (let i = 0; i < 40 && cl.length < 15; i++) {
+      const src = cl[Math.floor(Math.random() * cl.length)];
+      const before = bact.length;
+      if (divide(src)) cl.push(bact[bact.length - 1]);
+      if (bact.length === before) continue;
+    }
+  }
+  bact.forEach(b => b.t = rand(4, 30));
+  macs = [{ p: new THREE.Vector3(36, 44, 66), eat: 0 }, { p: new THREE.Vector3(94, 38, 100), eat: 0 }];
+  while (netGroup.children.length) { const c = netGroup.children.pop(); c.geometry.dispose(); }
+  reserve = 6; tissue = 0; minutes = 0; resT = 0; P.n = 0;
+  npcs.forEach(n => scene.remove(n.mesh)); npcs = []; npcT = 0; sparks = [];
+  spawnNeutrophil();
+}
+function spawnNeutrophil() {
+  P.pos.set(10, VY, VZ); P.vel.set(0, 0, 0);
+  P.hp = 100; P.gran = 3; P.eaten = 0; P.inside = []; P.n++;
+  yaw = -Math.PI / 2; pitch = 0; rollT = 0; lostT = 0;
+  state = 'cieva';
+  neutro.visible = true; neutro.rotation.set(0, 0, 0); neutro.scale.set(1, 1, 1);
+}
+
+// ---------- kolízie ----------
+const SAMPLES = [];
+for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+  if (!x && !y && !z) continue;
+  SAMPLES.push(new THREE.Vector3(x, y, z).normalize());
+}
+function solidAt(x, y, z, ign) {
+  const ix = Math.floor(x), iy = Math.floor(y), iz = Math.floor(z);
+  if (!inB(ix, iy, iz)) return true;
+  const t = grid[idx(ix, iy, iz)];
+  if (!t) return false;
+  if (ign && (t === T.ENDO || t === T.SEL)) return false;
+  if (L2 && (t === T.RET || t === T.LC)) return false;   // retikulárny epitel krypty je pórovitý, medzi lymfocytmi sa neutrofil pretlačí
+  return true;
+}
+function collides(p, ign) {
+  if (solidAt(p.x, p.y, p.z, ign)) return true;
+  for (const s of SAMPLES) if (solidAt(p.x + s.x * PR, p.y + s.y * PR, p.z + s.z * PR, ign)) return true;
+  return false;
+}
+function touchesType(type, r) {
+  for (const s of SAMPLES) {
+    const x = Math.floor(P.pos.x + s.x * r), y = Math.floor(P.pos.y + s.y * r), z = Math.floor(P.pos.z + s.z * r);
+    if (inB(x, y, z) && grid[idx(x, y, z)] === type) return true;
+  }
+  return false;
+}
+function tryMove(d, ign) {
+  for (const a of ['x', 'y', 'z']) {
+    P.pos[a] += d[a];
+    if (collides(P.pos, ign)) { P.pos[a] -= d[a]; P.vel[a] *= -.1; }
+  }
+}
+
+// ---------- ovládanie ----------
+const $ = id => document.getElementById(id);
+const canvas = renderer.domElement;
+function lock() { if (ready) canvas.requestPointerLock(); }
+$('menu').onclick = lock; $('pause').onclick = lock;
+$('koniec').onclick = () => { $('koniec').style.display = 'none'; reset(); lock(); };
+document.addEventListener('pointerlockchange', () => {
+  const locked = document.pointerLockElement === canvas;
+  if (locked) {
+    if (state === 'menu') { reset(); msg('Hľadaj zapálený úsek cievy – tyrkysové selektíny na stene.', 5); }
+    $('menu').style.display = 'none'; $('pause').style.display = 'none';
+    paused = false; showHud(true);
+  } else if (state !== 'menu' && state !== 'koniec') {
+    paused = true; $('pause').style.display = 'flex';
+  }
+});
+document.addEventListener('mousemove', e => {
+  if (document.pointerLockElement !== canvas) return;
+  yaw -= e.movementX * .0022; pitch -= e.movementY * .0022;
+  pitch = Math.max(-1.45, Math.min(1.45, pitch));
+});
+document.addEventListener('mousedown', e => { if (e.button === 0) mouseDown = true; });
+document.addEventListener('mouseup', e => { if (e.button === 0) mouseDown = false; });
+addEventListener('keydown', e => {
+  keys.add(e.code);
+  if (paused || (document.pointerLockElement !== canvas && !window.__test)) return;
+  if (e.code === 'KeyE' && state === 'adhezia') startDiapedesis();
+  if (e.code === 'KeyF' && state === 'tkanivo') degranulate();
+  if (e.code === 'KeyR' && state === 'tkanivo') releaseNET();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+showHud(false);
+function showHud(on) { for (const id of ['hud', 'cross', 'hint']) $(id).style.display = on ? 'block' : 'none'; }
+
+let msgTimer = 0;
+function msg(t, s = 3.5) { $('msg').textContent = t; $('msg').style.opacity = 1; msgTimer = s; }
+
+// ---------- akcie ----------
+function degranulate() {
+  if (P.gran <= 0) { msg('Granuly sú minuté.', 2); return; }
+  P.gran--;
+  let k = 0;
+  for (const b of bact) if (!b.dead && P.pos.distanceTo(bpos(b)) < 9 && Math.random() < .75) { removeBac(b); k++; }
+  tissue += 3; burstT = .45; spark(P.pos, 0xff6fa8, 90, 11, .8);
+  msg(`Degranulácia: elastáza a myeloperoxidáza zničili ${k} baktérií.`, 2.5);
+}
+function releaseNET() {
+  let k = 0;
+  for (const b of bact) if (!b.dead && !b.trap && P.pos.distanceTo(bpos(b)) < 15) { b.trap = rand(1, 3); k++; }
+  const pts = []; let prev = P.pos.clone();
+  for (let i = 0; i < 90; i++) {
+    const q = P.pos.clone().add(new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(2, 14)));
+    pts.push(prev.x, prev.y, prev.z, q.x, q.y, q.z);
+    prev = Math.random() < .3 ? P.pos.clone() : q;
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  netGroup.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(1.1, 1.6, 1.8), transparent: true, opacity: .85 })));
+  tissue += 6; spark(P.pos, 0x9ff0ff, 120, 13, 1.4);
+  killNeutrophil(`NET: sieť z DNA a enzýmov zachytila ${k} baktérií. Neutrofil pri tom zanikol.`);
+}
+// diapedéza: cieľ za stenou sa nájde hneď (najbližšie voľné miesto v smere pohľadu), bunka sa doň plynulo pretlačí
+function findExit() {
+  const rr = R + 2 + PR + 1.2, q = new THREE.Vector3();
+  // uprednostni stranu, kam sa hráč pozerá, inak tú, pri ktorej stene je
+  const ly = P.pos.y - VY + fwd.y * 4, lz = P.pos.z - VZ + fwd.z * 4;
+  const a0 = Math.atan2(Math.abs(ly) + Math.abs(lz) > .5 ? ly : P.pos.y - VY, Math.abs(ly) + Math.abs(lz) > .5 ? lz : P.pos.z - VZ);
+  for (let k = 0; k <= 36; k++) for (const sg of [1, -1]) for (const dx of [0, 2, -2, 4, -4, 7, -7]) {
+    const a = a0 + sg * k * .09;
+    q.set(P.pos.x + dx, VY + Math.sin(a) * rr, VZ + Math.cos(a) * rr);
+    if (inB(Math.floor(q.x), Math.floor(q.y), Math.floor(q.z)) && !collides(q, false)) return q.clone();
+  }
+  return null;
+}
+function startDiapedesis() {
+  diaExit = findExit();
+  if (!diaExit) { msg('Za touto časťou steny je tesno. Posuň sa kúsok ďalej po stene a skús to znova.', 3); state = 'rolovanie'; rollT = 1.2; return; }
+  state = 'diapedeza'; diaT = 0; diaStart = P.pos.clone(); P.vel.set(0, 0, 0);
+  diaDur = Math.min(2.6, Math.max(1.5, diaStart.distanceTo(diaExit) / 4));
+  msg('Diapedéza – pretláčaš sa medzi bunkami endotelu.', 3);
+}
+function killNeutrophil(text) {
+  state = 'mrtvy'; deadT = 2.8; neutro.visible = false; msg(text, 3.5); spark(P.pos, 0xcbb8f5, 110, 7, 1.6);
+}
+function engulf(b) {
+  spark(bpos(b), 0xffc94a, 12, 3, .5); removeBac(b); P.eaten++;
+  P.inside.push({ o: new THREE.Vector3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(2.6), t: 4 });
+  if (P.eaten >= EAT_CAP) killNeutrophil('Neutrofil je plný. Po fagocytóze zaniká apoptózou a makrofágy ho upracú.');
+}
+const bpos = b => new THREE.Vector3(b.x + .5, b.y + .5, b.z + .5);
+function endGame(win, text) {
+  state = 'koniec'; document.exitPointerLock(); showHud(false);
+  $('kTitle').textContent = win ? 'Infekcia zvládnutá' : 'Infekcia sa rozšírila';
+  $('kText').innerHTML = text + `<br><br>${L2 ? 'Čas od nákazy' : 'Čas od poranenia'}: <b>${fmtTime(minutes)}</b><br>Poškodenie tkaniva: <b>${Math.round(tissue)} %</b><br>Nasadené neutrofily: <b>${P.n}</b>`;
+  $('koniec').style.display = 'flex';
+}
+const fmtTime = m => m < 60 ? `${Math.floor(m)} min` : `${Math.floor(m / 60)} h ${Math.floor(m % 60)} min`;
+
+// ---------- slučka ----------
+const tmp2 = new THREE.Vector3();
+const fwd = new THREE.Vector3(), right = new THREE.Vector3(), tmp = new THREE.Vector3(), mat = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1);
+let last = performance.now(), hudT = 0;
+
+function update(dt) {
+  minutes += dt * 1.5;
+  fwd.set(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+  right.set(Math.cos(yaw), 0, -Math.sin(yaw));
+
+  // pohyb hráča
+  const inp = new THREE.Vector3();
+  if (keys.has('KeyW')) inp.add(fwd); if (keys.has('KeyS')) inp.sub(fwd);
+  if (keys.has('KeyD')) inp.add(right); if (keys.has('KeyA')) inp.sub(right);
+  if (keys.has('Space')) inp.y += 1; if (keys.has('ShiftLeft') || keys.has('ShiftRight')) inp.y -= 1;
+  if (inp.lengthSq() > 0) inp.normalize();
+
+  if (state === 'cieva' || state === 'rolovanie' || state === 'tkanivo') {
+    const sp = state === 'tkanivo' ? 9 : state === 'rolovanie' ? 4 : 12;
+    P.vel.lerp(inp.multiplyScalar(sp), 1 - Math.exp(-6 * dt));
+    const d = P.vel.clone().multiplyScalar(dt);
+    const dv = dvAt(P.pos.y, P.pos.z);
+    if (state !== 'tkanivo' && dv < R) d.x += (10 * (1 - (dv / R) ** 2) + .5) * dt * (state === 'rolovanie' ? .12 : 1);
+    tryMove(d, false);
+  }
+  if (state === 'cieva' || state === 'rolovanie') {
+    const touch = touchesType(T.SEL, PR + 1.6);
+    if (state === 'cieva') rollT = Math.max(0, rollT - dt * .5);
+    if (state === 'cieva' && touch) { state = 'rolovanie'; lostT = 0; msg('Selektíny ťa zachytili – kotúľaš sa po stene cievy.', 3); }
+    if (state === 'rolovanie') {
+      neutro.rotation.z -= dt * 2.5;
+      if (touch) { rollT += dt; lostT = 0; } else { lostT += dt; if (lostT > 1.2) state = 'cieva'; }
+      // selektíny držia bunku pri stene: jemný ťah k stene, aby sa kontakt pri pohybe nestrácal
+      const ry = P.pos.y - VY, rz = P.pos.z - VZ, rl = Math.hypot(ry, rz) || 1;
+      if (rl < R - PR - .3) tryMove(new THREE.Vector3(0, ry / rl, rz / rl).multiplyScalar(2.2 * dt), false);
+      if (rollT > 1.6) { state = 'adhezia'; P.vel.set(0, 0, 0); msg('Integríny sa aktivovali – pevná adhézia. Stlač E a prejdi stenou.', 4); }
+    }
+    if (P.pos.x > W - 8) { P.pos.x = 8; msg('Prúd krvi ťa odniesol ďalej. Skús to znova pri zapálenom úseku.', 3); }
+  }
+  if (state === 'diapedeza') {
+    diaT += dt;
+    const t = Math.min(1, diaT / diaDur), e = t * t * (3 - 2 * t);
+    P.pos.lerpVectors(diaStart, diaExit, e);
+    const sq = Math.sin(Math.PI * t);
+    neutro.scale.set(1 + .25 * sq, 1 - .3 * sq, 1 + .25 * sq);   // bunka sa sploští medzi bunkami endotelu
+    if (t >= 1) {
+      state = 'tkanivo'; neutro.rotation.set(0, 0, 0); neutro.scale.set(1, 1, 1);
+      msg(L2 ? 'Si v mandli. Sleduj signál IL-8 ku krypte – pórovitým epitelom prejdeš do jej vnútra.' : 'Si v tkanive. Sleduj signál IL-8 (žltozelené čiastočky) k baktériám.', 4.5);
+    }
+  }
+  if (state === 'mrtvy') {
+    deadT -= dt;
+    if (deadT <= 0) {
+      if (reserve > 0) { reserve--; spawnNeutrophil(); msg('Z kostnej drene prichádza ďalší neutrofil.', 3); }
+      else return endGame(false, L2 ? 'Došli neutrofily a baktérie ostali v mandli. Infekcia pokračuje.' : 'Došli neutrofily a baktérie ostali v rane. Infekcia pokračuje.');
+    }
+  }
+
+  // fagocytóza
+  let target = null;
+  if (state === 'tkanivo') {
+    let best = -1e9;
+    for (const b of bact) {
+      if (b.dead || b.trap) continue;
+      tmp.copy(bpos(b)).sub(P.pos); const d = tmp.length();
+      if (d > PR + 4.5) continue;
+      const sc = fwd.dot(tmp.normalize()) - d * .05;
+      if (sc > best) { best = sc; target = b; }
+    }
+    if (mouseDown && target) {
+      if (target !== curT) { curT = target; holdT = 0; }
+      holdT += dt;
+      if (holdT >= eatTime(target)) { engulf(target); curT = null; holdT = 0; }
+    } else { holdT = 0; curT = null; }
+    // leukocidíny
+    let near = 0;
+    for (const b of bact) if (!b.dead && !b.trap && P.pos.distanceToSquared(bpos(b)) < 121) near++;
+    if (!L2 && near > 10) {
+      P.hp -= Math.min(8, (near - 10) * .6) * dt; dmgFx = Math.min(1, dmgFx + dt * 1.5);
+      if (P.hp <= 0 && state === 'tkanivo') killNeutrophil('Leukocidíny stafylokokov rozrušili membránu neutrofilu.');
+    }
+  }
+  lastTarget = target;
+  targetBox.visible = !!target;
+  if (target) { targetBox.position.copy(bpos(target)); targetBox.material.color.set(target.ops ? 0xffffff : 0xffa040); }
+
+  // baktérie
+  const born = [];
+  for (const b of bact) {
+    if (b.dead) continue;
+    if (b.trap) { b.trap -= dt; if (b.trap <= 0) removeBac(b); continue; }
+    b.g = Math.min(1, b.g + dt * 2);
+    b.t -= dt;
+    if (b.t <= 0) { b.t = L2 ? rand(30, 40) : rand(22, 32); born.push(b); }
+    if (!b.ops && Math.random() < (L2 ? .004 + (abOn ? .15 * Math.exp(-Math.max(0, follDist(b.x, b.y, b.z)) / 30) : 0) : .03) * dt) b.ops = true;
+  }
+  if (L2 && !abOn && (abT += dt) > 90) { abOn = true; msg('Plazmatické bunky z folikulov tvoria protilátky IgG proti tomuto kmeňu. Označené baktérie pohltíš rýchlo.', 5); }
+  for (const b of born) if (bact.length < BAC_MAX - 30 && divide(b)) bact[bact.length - 1].g = 0;
+  // makrofágy
+  for (const m of macs) {
+    let nb = null, nd = 1e9;
+    for (const b of bact) { if (b.dead || b.trap) continue; const d = m.p.distanceToSquared(bpos(b)); if (d < nd) { nd = d; nb = b; } }
+    if (nb) {
+      const d = Math.sqrt(nd);
+      if (d > 6) m.p.add(bpos(nb).sub(m.p).normalize().multiplyScalar(3.2 * dt));
+      else if ((m.eat += dt) > (L2 && !nb.ops ? 4.8 : 2.4)) { m.eat = 0; spark(bpos(nb), 0xffc94a, 8, 3, .5); removeBac(nb); }
+    }
+    const dv = dvAt(m.p.y, m.p.z);
+    if (dv < R + 10) { tmp.set(0, m.p.y - VY, m.p.z - VZ).normalize().multiplyScalar(R + 10 - dv); m.p.add(tmp); }
+  }
+  // roj neutrofilov – ďalšie bunky prichádzajú na signál LTB4
+  if ((npcT += dt) > 22 && npcs.length < 3 && bact.length) {
+    npcT = 0;
+    npcs.push({ p: new THREE.Vector3(rand(52, 76), VY + R + 9, VZ + rand(-3, 3)), eaten: 0, eatT: 0, life: rand(50, 70), mesh: makeNeutroMesh(), ph: rand(0, 6) });
+    if (npcs.length === 1) msg('Prichádzajú ďalšie neutrofily – signál LTB4 zvoláva roj.', 3);
+  }
+  for (const n of npcs) {
+    n.life -= dt;
+    let nb = null, nd = 1e9, near = 0;
+    for (const b of bact) { if (b.dead || b.trap) continue; const d = n.p.distanceToSquared(bpos(b)); if (d < nd) { nd = d; nb = b; } if (d < 121) near++; }
+    if (near > 12) n.life -= (near - 12) * .4 * dt;
+    if (nb) {
+      tmp.copy(bpos(nb)).sub(n.p);
+      if (nd > 30) { n.p.addScaledVector(tmp.normalize(), 4.2 * dt); n.dir = tmp.clone(); }
+      else if ((n.eatT += dt) > (L2 && !nb.ops ? 3.4 : 1.7)) { n.eatT = 0; spark(bpos(nb), 0xffc94a, 8, 3, .5); removeBac(nb); n.eaten++; }
+    }
+    if (n.eaten >= 10 || n.life <= 0) { n.dead = true; spark(n.p, 0xcbb8f5, 60, 6, 1.4); scene.remove(n.mesh); }
+  }
+  npcs = npcs.filter(n => !n.dead);
+  // mastocyty uvoľňujú histamín
+  if (bact.length && (mastT += dt) > .5 && mastC.length) { mastT = 0; spark(mastC[Math.floor(Math.random() * mastC.length)], 0x9c7cff, 3, 2.5, 1.4); }
+  bact = bact.filter(b => !b.dead);
+
+  // poškodenie tkaniva, záloha neutrofilov
+  tissue = Math.min(100, tissue + bact.length * .0012 * dt);
+  if ((resT += dt) > 50) { resT = 0; if (reserve < 8) { reserve++; msg('Kostná dreň uvoľnila ďalší neutrofil do krvi.', 2.5); } }
+
+  if (bact.length === 0) return endGame(true, L2 ? 'Neutrofily, makrofágy a protilátky vyčistili kryptu mandle. Zápal môže ustúpiť.' : 'Neutrofily a makrofágy odstránili všetky baktérie. Rana sa môže začať hojiť.');
+  if (bact.length >= BAC_LOSE) return endGame(false, L2 ? 'Streptokoky sa premnožili a zápal sa šíri do okolia mandle (peritonzilárny absces). Telo bude potrebovať pomoc lekára.' : 'Stafylokoky sa premnožili a vytvorili absces. Telo bude potrebovať pomoc lekára.');
+  if (tissue >= 100) return endGame(false, 'Zápal a toxíny poškodili tkanivo príliš veľmi.');
+
+  // vnútri pohltené baktérie hynú vo fagozóme
+  for (const it of P.inside) it.t -= dt;
+  P.inside = P.inside.filter(it => it.t > 0);
+}
+
+function render(dt) {
+  clock += dt;
+  // hmla podľa prostredia: v krvi červenšia
+  const inV = dvAt(P.pos.y, P.pos.z) < R + 1 && state !== 'tkanivo';
+  scene.fog.color.lerp(inV ? FOG_V : FOG_T, 1 - Math.exp(-2 * dt)); scene.background.copy(scene.fog.color);
+  // dýchanie membrány neutrofilu
+  const sh = neutro.children[1];
+  sh.scale.set(1 + .045 * Math.sin(clock * 2.1), 1 + .04 * Math.sin(clock * 2.7 + 1), 1 + .045 * Math.sin(clock * 1.8 + 2));
+  neutro.children[0].rotation.y = Math.sin(clock * .7) * .25;
+  // postprocessing
+  dmgFx = Math.max(0, dmgFx - dt * .8);
+  fx.uniforms.uDmg.value = dmgFx; fx.uniforms.uTime.value = clock;
+  // prostredie
+  for (let i = 0; i < DN; i++) {
+    const v = dVel[i]; let x = dPos[i * 3] + v.x * dt, y = dPos[i * 3 + 1] + v.y * dt, z = dPos[i * 3 + 2] + v.z * dt;
+    const dv = dvAt(y, z); if (dv < R) x += (10 * (1 - (dv / R) ** 2) + .5) * dt;
+    if (x > W) x = 0; if (x < 0) x = W; if (z > D) z = 0; if (z < 0) z = D; if (y < 2 || y > 62) v.y *= -1;
+    dPos[i * 3] = x; dPos[i * 3 + 1] = y; dPos[i * 3 + 2] = z;
+  }
+  dGeo.attributes.position.needsUpdate = true;
+  sparks = sparks.filter(s => (s.l -= dt) > 0);
+  sparks.forEach((s, i) => {
+    s.p.addScaledVector(s.v, dt); s.v.multiplyScalar(Math.exp(-2.5 * dt));
+    const k = s.l / s.m; mat.compose(s.p, q.identity(), tmp.set(k, k, k)); spkMesh.setMatrixAt(i, mat); spkMesh.setColorAt(i, s.c);
+  });
+  spkMesh.count = sparks.length; spkMesh.instanceMatrix.needsUpdate = true; if (spkMesh.instanceColor) spkMesh.instanceColor.needsUpdate = true;
+  macMeshes.forEach((m, i) => m.scale.set(1 + .06 * Math.sin(clock * 1.3 + i), 1 + .05 * Math.sin(clock * 1.7 + i * 2), 1 + .06 * Math.sin(clock * 1.1 + i * 3)));
+  // neutrofil + kamera
+  neutro.position.copy(P.pos); neutro.rotation.y = yaw;
+  const desired = P.pos.clone().addScaledVector(fwd, -19).addScaledVector(right, 6).add(new THREE.Vector3(0, 5, 0));
+  const dir = desired.clone().sub(P.pos); const L = dir.length(); dir.normalize();
+  let dist = L;
+  for (let s = 2; s < L; s += .5) {
+    const cx = Math.floor(P.pos.x + dir.x * s), cy = Math.floor(P.pos.y + dir.y * s), cz = Math.floor(P.pos.z + dir.z * s);
+    if (inB(cx, cy, cz) && grid[idx(cx, cy, cz)]) { dist = Math.max(1, s - 1); break; }
+  }
+  camera.position.copy(P.pos).addScaledVector(dir, dist);
+  // keď je kamera pri bunke tesne, neutrofil sa zprehľadní
+  const fade = Math.min(1, Math.max(.15, (dist - 4) / 10));
+  neuMats[0].transparent = fade < 1; neuMats[0].opacity = fade; neuMats[0].depthWrite = fade >= 1;
+  neuMats[1].opacity = .4 * fade; granMesh.material.opacity = fade;
+  camera.lookAt(tmp.copy(P.pos).addScaledVector(fwd, 10));
+
+  // krvinky
+  for (let i = 0; i < RBC_N; i++) {
+    const r = rbcs[i];
+    const dv = dvAt(r.y, r.z);
+    r.x += (10 * (1 - (dv / R) ** 2) + .5) * dt; if (r.x > W + 4) r.x = -4;
+    r.q.x += r.w * dt; r.q.z += r.w * .7 * dt;
+    // krvinky sa neutrofilu vyhnú (obtekajú ho) a pri kamere sa nekreslia
+    tmp.set(r.x - P.pos.x, r.y - P.pos.y, r.z - P.pos.z);
+    if (tmp.lengthSq() < 81) { tmp.x = 0; tmp.normalize(); r.y += tmp.y * 6 * dt; r.z += tmp.z * 6 * dt; if (dvAt(r.y, r.z) > R - 4) { const k = (R - 4) / dvAt(r.y, r.z); r.y = VY + (r.y - VY) * k; r.z = VZ + (r.z - VZ) * k; } }
+    const nearCam = camera.position.distanceToSquared(tmp.set(r.x, r.y, r.z)) < 49;
+    q.setFromEuler(r.q); mat.compose(tmp.set(r.x, r.y, r.z), q, nearCam ? tmp2.set(0, 0, 0) : one); rbcMesh.setMatrixAt(i, mat);
+  }
+  rbcMesh.instanceMatrix.needsUpdate = true;
+  for (let i = 0; i < PLT_N; i++) {
+    const r = plts[i], dv = dvAt(r.y, r.z);
+    r.x += (10 * (1 - (dv / R) ** 2) + .5) * dt; if (r.x > W + 3) r.x = -3;
+    r.q.x += r.w * dt; r.q.y += r.w * .6 * dt;
+    q.setFromEuler(r.q); mat.compose(tmp.set(r.x, r.y, r.z), q, one); pltMesh.setMatrixAt(i, mat);
+  }
+  pltMesh.instanceMatrix.needsUpdate = true;
+  for (const n of npcs) {
+    n.mesh.position.copy(n.p);
+    if (n.dir) n.mesh.rotation.y = Math.atan2(-n.dir.x, -n.dir.z);
+    n.mesh.children[1].scale.set(1 + .05 * Math.sin(clock * 2 + n.ph), 1 + .04 * Math.sin(clock * 2.6 + n.ph), 1 + .05 * Math.sin(clock * 1.7 + n.ph));
+  }
+  for (let i = 0; i < GN; i++) { const k = .75 + .3 * Math.sin(clock * 3.3 + i * 1.7); granMesh.setColorAt(i, tmp2.set(1.05 * k, .62 * k, .9 * k)); }
+  granMesh.instanceColor.needsUpdate = true;
+
+  // baktérie
+  let n = 0;
+  q.identity();
+  for (const b of bact) {
+    if (n >= BAC_MAX) break;
+    const s = (.4 + .6 * b.g) * (1.08 + .04 * Math.sin(clock * 3 + b.x)), el = b.t < 2 && !b.trap ? 1 + (2 - b.t) * .2 : 1;
+    mat.compose(tmp.set(b.x + .5, b.y + .5, b.z + .5), q, new THREE.Vector3(s * el, s, s));
+    bacMesh.setMatrixAt(n, mat);
+    bacMesh.setColorAt(n, b.trap ? C_TRAP : b.ops ? C_OPS : C_BAC); n++;
+  }
+  if (neutro.visible) for (const it of P.inside) {
+    if (n >= BAC_MAX) break;
+    const s = Math.max(.05, it.t / 4) * .9;
+    tmp.copy(it.o).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw).add(P.pos);
+    mat.compose(tmp, q, new THREE.Vector3(s, s, s));
+    bacMesh.setMatrixAt(n, mat); bacMesh.setColorAt(n, C_IN); n++;
+  }
+  bacMesh.count = n;
+  bacMesh.instanceMatrix.needsUpdate = true;
+  if (bacMesh.instanceColor) bacMesh.instanceColor.needsUpdate = true;
+
+  macs.forEach((m, i) => { macMeshes[i].position.copy(m.p); macMeshes[i].rotation.y += dt * .2; });
+
+  // chemokíny
+  for (let i = 0; i < PN; i++) {
+    const p = parts[i];
+    p.l -= dt;
+    if (p.l <= 0 && bact.length) {
+      const b = bact[Math.floor(Math.random() * bact.length)];
+      p.p.set(b.x + .5, b.y + .5, b.z + .5);
+      p.v.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize().multiplyScalar(rand(2, 4.5));
+      p.l = rand(4, 9);
+    }
+    p.p.addScaledVector(p.v, dt);
+    pPos[i * 3] = p.p.x; pPos[i * 3 + 1] = p.p.y; pPos[i * 3 + 2] = p.p.z;
+  }
+  pGeo.attributes.position.needsUpdate = true;
+  if (L2) {
+    for (let i = 0; i < AN; i++) {
+      const p = aParts[i];
+      p.l -= dt;
+      if (p.l <= 0 && abOn && FOLL.length) {
+        const f = FOLL[i % FOLL.length];
+        p.v.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).normalize();
+        p.p.copy(f.c).addScaledVector(p.v, f.r + .5); p.v.multiplyScalar(rand(1.5, 3.5)); p.l = rand(5, 10);
+      } else if (p.l <= 0) p.p.set(0, -99, 0);
+      p.p.addScaledVector(p.v, dt);
+      aPos[i * 3] = p.p.x; aPos[i * 3 + 1] = p.p.y; aPos[i * 3 + 2] = p.p.z;
+    }
+    aGeo.attributes.position.needsUpdate = true;
+  }
+
+  // šípka k najsilnejšiemu signálu
+  let nb = null, nd = 1e9, sig = 0;
+  for (const b of bact) { const d = P.pos.distanceTo(bpos(b)); sig += Math.exp(-d / 25); if (d < nd) { nd = d; nb = b; } }
+  arrow.visible = state === 'tkanivo' && !!nb && nd > 12;
+  if (arrow.visible) {
+    const ad = bpos(nb).sub(P.pos).normalize();
+    arrow.position.copy(P.pos).addScaledVector(ad, 8);
+    arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ad);
+  }
+
+  // efekt degranulácie
+  if (burstT > 0) {
+    burstT -= dt; const k = 1 - burstT / .45;
+    burst.position.copy(P.pos); burst.scale.setScalar(2 + k * 7); burst.material.opacity = .6 * (1 - k);
+  } else burst.material.opacity = 0;
+
+  // HUD
+  if ((hudT -= dt) <= 0) {
+    hudT = .1;
+    $('hTitle').textContent = `Neutrofil č. ${P.n}`;
+    $('hTime').textContent = fmtTime(minutes);
+    $('hBac').textContent = bact.length;
+    $('bBac').style.width = Math.min(100, bact.length / BAC_LOSE * 100) + '%';
+    $('hTis').textContent = Math.round(tissue) + ' %'; $('bTis').style.width = tissue + '%';
+    const hp = Math.max(0, P.hp);
+    $('hHp').textContent = Math.round(hp) + ' %'; $('bHp').style.width = hp + '%';
+    $('hGr').textContent = '●'.repeat(P.gran) + '○'.repeat(3 - P.gran);
+    $('hEat').textContent = `${P.eaten} / ${EAT_CAP}`;
+    $('hRes').textContent = reserve;
+    $('sigWrap').style.display = state === 'tkanivo' ? 'block' : 'none';
+    if (L2) $('hAb').textContent = abOn ? 'pôsobia' : `tvoria sa (${Math.min(99, Math.round(abT / 90 * 100))} %)`;
+    $('bSig').style.width = Math.min(100, sig / 10 * 100) + '%';
+    $('hSig').textContent = sig > 6 ? 'silný' : sig > 2 ? 'stredný' : 'slabý';
+    const hints = {
+      cieva: 'Plávaš s prúdom krvi. Nájdi úsek steny s tyrkysovými selektínmi a dotkni sa ho.',
+      rolovanie: 'Kotúľaš sa po endoteli – drž kontakt so stenou.',
+      adhezia: 'Pevná adhézia. Stlač E – diapedéza cez stenu cievy.',
+      diapedeza: 'Pretláčaš sa stenou cievy…',
+      tkanivo: curT && holdT > 0 ? `Fagocytóza… ${Math.min(100, Math.round(holdT / eatTime(curT) * 100))} %` : lastTarget ? (L2 ? `S. pyogenes – ${lastTarget.ops ? 'označený protilátkou a C3b, pohltíš ho rýchlo' : 'neoznačený, puzdro sťažuje fagocytózu'}` : `S. aureus – ${lastTarget.ops ? 'označený C3b, pohltíš ho rýchlo' : 'neoznačený, fagocytóza trvá dlhšie'}`) : 'Drž ľavé tlačidlo pri baktérii · F degranulácia · R NET',
+      mrtvy: 'Neutrofil zanikol…',
+    };
+    $('hint').textContent = hints[state] || '';
+  }
+  if (msgTimer > 0 && (msgTimer -= dt) <= 0) $('msg').style.opacity = 0;
+
+  composer.render();
+}
+
+function loop(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (state !== 'menu' && state !== 'koniec' && !paused) update(dt);
+  if (state !== 'koniec') render(paused || state === 'menu' ? 0 : dt);
+  else composer.render();
+  requestAnimationFrame(loop);
+}
+// pozadie menu: pohľad do cievy
+P.pos.set(10, VY, VZ);
+fwd.set(1, 0, 0);
+requestAnimationFrame(loop);
+// testovacie rozhranie (konzola)
+window.__hra = {
+  start() { $('menu').style.display = 'none'; reset(); showHud(true); },
+  w: WM, col: (x, y, z) => collides(new THREE.Vector3(x, y, z), false),
+  get s() { return { state, bac: bact.length, ops: bact.filter(b => b.ops).length, pos: P.pos.toArray().map(Math.round), tissue: Math.round(tissue), hp: Math.round(P.hp), eaten: P.eaten, reserve }; },
+  tp(x, y, z, st) { P.pos.set(x, y, z); if (st) state = st; },
+  look(a, b) { yaw = a; pitch = b; }, keys, mouse(v) { mouseDown = v; },
+  step(sec) { for (let t = 0; t < sec && state !== 'koniec'; t += 1 / 30) { update(1 / 30); render(1 / 30); } return this.s; },
+  key(c) { dispatchEvent(new KeyboardEvent('keydown', { code: c })); keys.delete(c); },
+};
+</script>
+</body>
+</html>
